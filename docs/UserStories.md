@@ -1,0 +1,522 @@
+# User Stories
+## 1. Customer Account & Registration
+### US-001 — Register Account
+> **As a customer**  
+> I want to register for a digital wallet account  
+> So that I can use the wallet's financial services.
+
+### US-002 — Verify Mobile Number
+> **As a customer**  
+> I want to verify my mobile number using an OTP  
+> So that my account can be securely activated.
+
+### US-003 — Verify Email
+> **As a customer**  
+> I want to verify my email address  
+> So that I can use email-based communication and account recovery.
+
+### US-004 — Login
+> **As a customer**  
+> I want to log in securely  
+> So that I can access my wallet account.
+
+### US-005 — Logout
+> **As a customer**  
+> I want to log out of my account  
+> So that I can prevent unauthorized access to my wallet.
+
+### US-006 — Reset Password
+> **As a customer**  
+> I want to reset my forgotten password  
+> So that I can regain access to my account.
+
+### US-007 — Change Password
+> **As a customer**  
+> I want to change my password  
+> So that I can keep my account secure.
+
+### US-008 — Enable MFA
+> **As a customer**  
+> I want to enable multi-factor authentication  
+> So that my account has an additional layer of security.
+
+## 2. Customer Profile
+### US-009 — View Profile
+> **As a customer**  
+> I want to view my profile information  
+> So that I can verify my personal details.
+
+### US-010 — Update Profile
+> **As a customer**  
+> I want to update my personal information  
+> So that my account details remain accurate.
+
+### US-011 — Manage Devices
+> **As a customer**  
+> I want to view my registered devices  
+> So that I can identify devices that have access to my account.
+
+### US-012 — Remove Device
+> **As a customer**  
+> I want to remove an unrecognized device  
+> So that I can protect my account from unauthorized access.
+
+## 3. KYC / Identity Verification
+### US-013 — Submit KYC
+> **As a customer**  
+> I want to submit my identity information and documents  
+> So that I can verify my identity and access wallet services.
+
+### US-014 — View KYC Status
+> **As a customer**  
+> I want to view my KYC verification status  
+> So that I know whether my identity verification has been approved.
+
+### US-015 — Resubmit KYC
+> **As a customer**  
+> I want to resubmit rejected KYC information  
+> So that I can correct verification issues and complete my identity verification.
+
+### US-016 — Review KYC
+> **As a compliance officer**  
+> I want to review customer KYC applications  
+> So that I can verify customer identities.
+
+### US-017 — Approve KYC
+> **As a compliance officer**  
+> I want to approve a valid KYC application  
+> So that the customer can access permitted wallet services.
+
+### US-018 — Reject KYC
+> **As a compliance officer**  
+> I want to reject an invalid KYC application  
+> So that unverified customers cannot access restricted financial services.
+
+## 4. Wallet Management
+### US-019 — Create Wallet
+> **As a customer**  
+> I want a wallet to be created after successful registration  
+> So that I can store and manage my digital funds.
+
+### US-020 — View Wallet Balance
+> **As a customer**  
+> I want to view my wallet balance  
+> So that I know how much money is available.
+
+### US-021 — View Wallet Details
+> **As a customer**  
+> I want to view my wallet details  
+> So that I can manage my wallet account.
+
+### US-022 — Deposit Money
+> **As a customer**  
+> I want to deposit money into my wallet  
+> So that I can use my funds for digital payments and transfers.
+
+### US-023 — Withdraw Money
+> **As a customer**  
+> I want to withdraw money from my wallet  
+> So that I can access my funds outside the wallet.
+
+### US-024 — Freeze Wallet
+> **As a customer**  
+> I want to temporarily freeze my wallet  
+> So that I can prevent transactions when I suspect unauthorized activity.
+
+### US-025 — Unfreeze Wallet
+> **As a customer**  
+> I want to unfreeze my wallet  
+> So that I can resume normal wallet operations after confirming it is secure.
+
+## 5. Money Transfer
+### US-026 — Transfer Money
+> **As a customer**  
+> I want to transfer money  
+> So that I can send money to another user.
+
+### US-027 — Transfer to Bank Account
+> **As a customer**  
+> I want to transfer money to a bank account  
+> So that I can send money outside the digital wallet.
+
+### US-028 — Receive Money
+> **As a customer**  
+> I want to receive money from another user  
+> So that other people can send funds to my wallet.
+
+### US-029 — Save Beneficiary
+> **As a customer**  
+> I want to save a beneficiary  
+> So that I can transfer money to frequently used recipients more easily.
+
+### US-030 — Manage Beneficiaries
+> **As a customer**  
+> I want to update or remove my beneficiaries  
+> So that I can keep my recipient information accurate and secure.
+
+### US-031 — Schedule Transfer
+> **As a customer**  
+> I want to schedule a future money transfer  
+> So that I can automatically send money at a specified time.
+
+### US-032 — Cancel Scheduled Transfer
+> **As a customer**  
+> I want to cancel a scheduled transfer  
+> So that I can prevent a transfer that I no longer need.
+
+## 6. Transaction Management
+### US-033 — View Transaction History
+> **As a customer**  
+> I want to view my transaction history  
+> So that I can track my financial activities.
+
+### US-034 — Search Transactions
+> **As a customer**  
+> I want to search and filter transactions  
+> So that I can quickly find a specific transaction.
+
+### US-035 — View Transaction Details
+> **As a customer**  
+> I want to view transaction details  
+> So that I can understand the status and information of a transaction.
+
+### US-036 — Download Statement
+> **As a customer**  
+> I want to download my wallet statement  
+> So that I can keep a record of my financial activities.
+
+### US-037 — View Transaction Status
+> **As a customer**  
+> I want to see whether my transaction is pending, successful, or failed  
+> So that I know the current state of my payment.
+
+## 7. QR Payment
+### US-038 — Scan QR Code
+> **As a customer**  
+> I want to scan a merchant's QR code  
+> So that I can make a digital payment.
+
+### US-039 — Generate Payment QR
+> **As a customer**  
+> I want to generate a QR code to receive money  
+> So that another person can pay me easily.
+
+### US-040 — Confirm QR Payment
+> **As a customer**  
+> I want to review and confirm a QR payment  
+> So that I can verify the payment details before sending money.
+
+### US-041 — Receive QR Payment
+> **As a merchant**  
+> I want to receive customer payments through QR codes  
+> So that I can accept digital payments from customers.
+
+## 8. Merchant Management
+### US-042 — Register Merchant
+> **As a merchant**  
+> I want to register my business  
+> So that I can accept digital wallet payments.
+
+### US-043 — Manage Merchant Profile
+> **As a merchant**  
+> I want to manage my business information  
+> So that my merchant account remains accurate.
+
+### US-044 — Generate Merchant QR
+> **As a merchant**  
+> I want to generate a payment QR code  
+> So that customers can pay my business digitally.
+
+### US-045 — View Merchant Transactions
+> **As a merchant**  
+> I want to view my payment transactions  
+> So that I can track my business sales.
+
+### US-046 — View Sales Report
+> **As a merchant**  
+> I want to view sales reports  
+> So that I can analyze my business revenue.
+
+### US-047 — Export Sales Report
+> **As a merchant**  
+> I want to export my sales report  
+> So that I can use the data for accounting and business analysis.
+
+## 9. Refund
+### US-048 — Request Refund
+> **As a merchant**  
+> I want to request a refund for a customer payment  
+> So that I can return money to a customer when necessary.
+
+### US-049 — Review Refund
+> **As an admin**  
+> I want to review refund requests  
+> So that I can ensure refunds comply with business policies.
+
+### US-050 — Process Refund
+> **As a system**
+> I want to process an approved refund
+> So that the customer's money is returned correctly.
+
+### US-051 — View Refund Status
+> **As a customer**  
+> I want to view my refund status  
+> So that I know whether my refund has been completed.
+
+## 10. Bill Payment
+### US-052 — Pay Bill
+> **As a customer**  
+> I want to pay my bills using my wallet  
+> So that I can conveniently pay for services digitally.
+
+### US-053 — View Bill
+> **As a customer**  
+> I want to view my outstanding bill  
+> So that I know how much I need to pay.
+
+### US-054 — Mobile Top-Up
+> **As a customer**  
+> I want to top up my mobile phone  
+> So that I can maintain my mobile service.
+
+### US-055 — View Bill Payment History
+> **As a customer**  
+> I want to view my bill payment history  
+> So that I can track my previous bill payments.
+
+## 11. Notifications
+### US-056 — Transaction Notification
+> **As a customer**  
+> I want to receive a notification after a transaction  
+> So that I know when money has been transferred or received.
+
+### US-057 — Login Notification
+> **As a customer**  
+> I want to receive a notification when my account is accessed  
+> So that I can identify unauthorized login activity.
+
+### US-058 — Configure Notifications
+> **As a customer**  
+> I want to configure my notification preferences  
+> So that I can control how I receive wallet alerts.
+
+### US-059 — Send Notification
+> **As a system**  
+> I want to send transaction notifications  
+> So that customers and merchants receive timely updates.
+
+## 12. Fraud & Risk Management
+### US-060 — Detect Suspicious Transaction
+> **As a system**  
+> I want to analyze transactions for suspicious activity  
+> So that potentially fraudulent transactions can be identified.
+
+### US-061 — Review Fraud Alert
+> **As a compliance officer**  
+> I want to review suspicious transaction alerts  
+> So that I can investigate potential fraudulent activity.
+
+### US-062 — Block Suspicious Transaction
+> **As a compliance officer**  
+> I want to block a suspicious transaction  
+> So that potentially fraudulent funds are not transferred.
+
+### US-063 — Review Customer Risk
+> **As a compliance officer**  
+> I want to review a customer's risk profile  
+> So that I can determine whether additional verification is required.
+
+## 13. Customer Support
+### US-064 — Search Customer
+> **As a support agent**  
+> I want to search for a customer  
+> So that I can assist with customer requests.
+
+### US-065 — View Customer Information
+> **As a support agent**  
+> I want to view permitted customer information  
+> So that I can investigate customer issues.
+
+### US-066 — Investigate Failed Transaction
+> **As a support agent**  
+> I want to investigate failed transactions  
+> So that I can explain the issue and assist the customer.
+
+### US-067 — Create Support Case
+> **As a support agent**  
+> I want to create a support case  
+> So that customer issues can be tracked and resolved.
+
+### US-068 — Update Support Case
+> **As a support agent**  
+> I want to update the support case status  
+> So that customers and internal teams know the progress of an issue.
+
+## 14. Admin Management
+### US-069 — Manage Customers
+> **As an admin**  
+> I want to view and manage customer accounts  
+> So that I can perform authorized operational activities.
+
+### US-070 — Freeze Customer Account
+> **As an admin**  
+> I want to freeze a customer account  
+> So that unauthorized or risky account activity can be stopped.
+
+### US-071 — Unfreeze Customer Account
+> **As an admin**  
+> I want to unfreeze a customer account  
+> So that a legitimate customer can resume using the wallet.
+
+### US-072 — Manage Merchants
+> **As an admin**  
+> I want to manage merchant accounts
+> So that I can maintain the merchant ecosystem.
+
+### US-073 — View Transactions
+> **As an admin**  
+> I want to search and view transactions
+> So that I can monitor wallet operations.
+
+### US-074 — Generate Platform Report
+> **As an admin**
+> I want to generate platform reports
+> So that I can monitor business and operational performance.
+
+## 15. Role & Permission Management
+### US-075 — View Roles
+> **As a super admin**  
+> I want to view system roles  
+> So that I can understand the access structure of the platform.
+
+### US-076 — Create Role
+> **As a super admin**  
+> I want to create a role  
+> So that I can define access for different types of users.
+
+### US-077 — Assign Role
+> **As a super admin**  
+> I want to assign a role to an authorized user  
+> So that the user receives the appropriate system access.
+
+### US-078 — Manage Permissions
+> **As a super admin**  
+> I want to manage role permissions  
+> So that I can control what actions each role can perform.
+
+## 16. Audit & Security
+### US-079 — Record Audit Log
+> **As a system**  
+> I want to record important user and system activities  
+> So that financial and security operations are traceable.
+
+### US-080 — View Audit Logs
+> **As an admin**  
+> I want to view authorized audit logs  
+> So that I can investigate operational and security events.
+
+### US-081 — View Security Activity
+> **As a customer**  
+> I want to view my recent security activity  
+> So that I can identify suspicious account activity.
+
+## 17. Reconciliation & Settlement
+### US-082 — Merchant Settlement
+> **As a system**  
+> I want to calculate and process merchant settlements  
+> So that merchants receive the funds they are owed.
+
+### US-083 — Reconcile Transactions
+> **As a system**  
+> I want to reconcile wallet transactions with external payment records  
+> So that financial records remain accurate.
+
+### US-084 — Detect Reconciliation Difference
+> **As a system**  
+> I want to detect differences between internal and external transaction records  
+> So that financial discrepancies can be investigated.
+
+### US-085 — Review Reconciliation Exception
+> **As a finance officer**  
+> I want to review reconciliation exceptions  
+> So that financial discrepancies can be resolved.
+
+## 18. Reporting
+### US-086 — Customer Financial Report
+> **As a customer**  
+> I want to view my financial activity report  
+> So that I can understand my wallet usage.
+
+### US-087 — Merchant Report
+> **As a merchant**  
+> I want to generate a transaction report  
+> So that I can analyze my business payments.
+
+### US-088 — Operational Report
+> **As an admin**  
+> I want to generate operational reports  
+> So that I can monitor platform performance and activity.
+
+### US-089 — Compliance Report
+> **As a compliance officer**  
+> I want to generate compliance reports  
+> So that I can meet regulatory reporting requirements.
+
+## 19. System & Platform Operations
+### US-090 — Process Transaction Event
+> **As a system**  
+> I want to process transaction events asynchronously  
+> So that transaction-related services can operate reliably and independently.
+
+### US-091 — Retry Failed Event
+> **As a system**  
+> I want to retry failed event processing  
+> So that temporary service failures do not cause data loss.
+
+### US-092 — Handle Failed Event
+> **As a system**  
+> I want to move repeatedly failed events to a dead-letter queue  
+> So that failed messages can be investigated without blocking normal processing.
+
+### US-093 — Monitor Service Health
+> **As a system**  
+> I want to expose service health information  
+> So that platform operators can detect service failures quickly.
+
+## Final User Story Structure
+```
+EPIC
+ │
+ ├── Feature
+ │      │
+ │      ├── User Story
+ │      │       │
+ │      │       ├── Acceptance Criteria
+ │      │       │
+ │      │       ├── Technical Tasks
+ │      │       │
+ │      │       └── Test Cases
+ │      │
+ │      └── User Story
+ │
+ └── Feature
+```
+```
+EPIC: Money Transfer
+       │
+       ├── US-026 Transfer Money
+       │       │
+       │       ├── AC: Customer has sufficient balance
+       │       ├── AC: Recipient exists
+       │       ├── AC: Transaction limit is not exceeded
+       │       ├── AC: Transaction is recorded
+       │       └── AC: Notification is sent
+       │
+       ├── US-027 Bank Transfer
+       │
+       ├── US-028 Receive Money
+       │
+       ├── US-029 Save Beneficiary
+       │
+       └── US-031 Schedule Transfer
+```
