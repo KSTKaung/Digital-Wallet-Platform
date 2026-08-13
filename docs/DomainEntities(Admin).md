@@ -1,4 +1,4 @@
-# DomainEntities(Admin)
+# Domain Entities (Admin)
 
 ## 1. Admin & Operations Domain
 Admin & Operations  
