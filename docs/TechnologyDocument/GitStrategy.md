@@ -1,0 +1,397 @@
+# Digital Wallet Platform — Technical Planning
+## Git Strategy
+### Branch Model
+```
+main                          ← always deployable, protected, CI must pass
+ ├── feature/wallet-ledger-schema
+ ├── feature/jwt-auth
+ ├── fix/negative-balance-race-condition
+ ├── chore/update-flyway-version
+ └── release/v0.2.0            (optional, only when cutting a tagged release)
+```
+| Branch type	| Prefix	   | Purpose                                                       | Lives from main, merges to main
+| ----------- | ---------- | ------------------------------------------------------------- | --------------------------------
+| Feature     | feature/*  | New functionality (maps to a use case, module, or Phase task) | Yes
+| Fix         | fix/*	     | Bug fixes discovered post-merge	                             | Yes
+| Chore       | chore/*	   | Tooling, deps, CI config, non-code changes	                   | Yes
+| Refactor    | refactor/* | 	Behavior-preserving code restructuring	                     | Yes
+| Spike       | spike/*	   | Throwaway exploration/prototyping, not meant to merge as-is   | No (discard or cherry-pick)
+| Hotfix      | hotfix/*	 | Urgent fix directly off a deployed tag	                       | Yes, fast-tracked
+<!-- No develop branch. main is the single source of truth. This avoids the classic GitFlow overhead
+(merge-hell between develop and main) that isn't justified for a project without parallel release trains. -->
+
+### Branch Naming Convention
+```
+<type>/<short-kebab-case-description>
+```
+
+**Examples:**
+- feature/double-entry-ledger-schema
+- feature/idempotency-key-redis
+- fix/wallet-lock-deadlock
+- chore/testcontainers-ci-setup
+
+### Commit Message Convention
+```
+<type>(<scope>): <short summary>
+
+[optional body]
+
+[optional footer(s)]
+```
+| Type    	| When to use
+| --------- | ------------------------------------------------------------------
+| feat	    | New feature or endpoint
+| fix	      | Bug fix
+| refactor  | Code change that doesn't alter behavior
+| test      | Adding/fixing tests only
+| docs	    | README, ADRs, comments
+| chore	    | Build config, deps, tooling
+| perf	    | Performance improvement
+| ci	      | CI/CD pipeline changes
+| security	| Security-related fix (custom type, worth tracking explicitly here)
+
+**Examples:**
+```
+feat(wallet): add idempotency-key check before withdrawal
+
+fix(ledger): prevent double-credit on Kafka consumer retry
+
+Root cause: consumer had no dedup check on event id.
+Added idempotent consumer pattern using processed_events table.
+
+Closes #37
+```
+
+<!-- Rule of thumb: one logical change per commit. A commit should be revertable on its own without breaking the build. -->
+
+### Pull Request Workflow
+Even solo, PRs are used deliberately
+```
+1. Branch off main:        git checkout -b feature/transfer-funds-usecase
+2. Commit in small units (Conventional Commits)
+3. Push, open PR into main
+4. CI runs: build → unit tests → integration tests (Testcontainers) → lint
+5. Self-review the diff on GitHub (catches things terminal review misses)
+6. Squash-merge into main
+7. Delete branch
+```
+**Branch protection rules on main:**
+- Require PR before merging (no direct pushes, even for the owner)
+- Require status checks to pass (build, test, lint) before merge
+- Require branches to be up to date with **_main_** before merging
+- Require squash merge only → keeps **_main_** history linear and readable, one commit per feature
+
+**PR template (.github/pull_request_template.md):**
+```
+## What
+Brief description of the change.
+
+## Why
+Link to phase/issue this addresses.
+
+## How to test
+Steps or command to verify locally.
+
+## Checklist
+- [ ] Unit tests added/updated
+- [ ] Integration tests pass locally (Testcontainers)
+- [ ] No secrets/credentials committed
+- [ ] Flyway migration added (if schema changed) — never edit an existing committed migration
+```
+
+### Versioning & Tagging
+Semantic Versioning (**_MAJOR_**.**_MINOR_**.**_PATCH_**), tagged at meaningful milestones
+| Tag    | Corresponds to
+| ------ | ------------------------------------------------------------
+| v0.1.0 | Phase 1 complete — core wallet/ledger MVP
+| v0.2.0 | Phase 2 complete — security & idempotency hardening
+| v0.3.0 | Phase 3 complete — event-driven architecture (Kafka/outbox)
+| v0.4.0 | Phase 4 complete — testing & observability
+| v1.0.0 | Phase 5 complete — deployed, documented, demo-ready
+
+**bash:**
+```
+git tag -a v0.2.0 -m "Phase 2: JWT auth, idempotency, distributed locking"
+git push origin v0.2.0
+```
+### _.gitignore_ Essentials (Spring Boot / Java)
+```
+# Build output
+target/
+build/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Env / secrets — never commit real credentials
+application-local.yml
+.env
+*.pem
+*.key
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+```
+
+### Handling Schema Migrations in Git
+- Flyway/Liquibase migration files are append-only: once a migration is merged to **_main_**,
+  it is never edited or deleted — only new migration files are added (**_V5___**..., **_V6___**...).
+- If you made a mistake in a migration that's only in a feature branch (not yet merged),
+  fine to fix it directly. Once merged, treat it as immutable history — same discipline as a real production team.
+
+### Pre-Commit / Pre-Push Hooks
+- **pre-commit:** run Spotless/Checkstyle formatting check, block commit on violations
+- **commit-msg:** run commitlint against Conventional Commits pattern
+- **pre-push (optional):** run unit tests locally before pushing
+
+
+### Hotfix Process (post-deployment bug)
+```
+1. git checkout -b hotfix/wallet-balance-overflow main
+2. Fix, test, PR directly into main (expedited review)
+3. Merge, tag immediately: v0.2.1 (patch bump)
+4. Deploy
+```
+
+### Quick Reference Summary
+| Concern	         | Approach
+| ---------------- | ----------------------------------------------------
+| Branching model	 | Trunk-based (GitHub Flow), no **_develop_** branch
+| Merge strategy	 | Squash merge only
+| Commit format	   | Conventional Commits, enforced by commit-msg hook
+| Protected branch | **_main_** — PR + passing CI required
+| Versioning	     | SemVer, tagged per phase
+| Migrations	     | Append-only once merged
+| Secrets	         | Never committed; **_.example_** templates only
+| CI trigger	     | On every PR to **_main_** (build, test, lint)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
