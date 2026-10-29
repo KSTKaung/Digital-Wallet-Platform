@@ -50,9 +50,7 @@ app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
-# OpenAPI docs are off by default and enabled only in the local profile.
+# OpenAPI JSON (/v3/api-docs) is off by default and enabled only in the local profile.
 springdoc:
   api-docs:
-    enabled: false
-  swagger-ui:
     enabled: false

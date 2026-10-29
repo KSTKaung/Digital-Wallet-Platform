@@ -27,13 +27,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private static final String[] PUBLIC_PATHS = {
-    "/actuator/health",
-    "/actuator/health/**",
-    "/actuator/info",
-    "/v3/api-docs/**",
-    "/swagger-ui.html",
-    "/swagger-ui/**",
-    "/error"
+    "/actuator/health", "/actuator/health/**", "/actuator/info", "/v3/api-docs/**", "/error"
   };
 
   @Bean

@@ -70,7 +70,7 @@ documentations/   01–05 target architecture; 06 MVP decisions (governs the MVP
 ### Local stack (repository root)
 1. `cp .env.example .env` and set your own `DB_PASSWORD`.
 2. `docker compose up -d --build --wait` (or `scripts/dev-up.sh`, add `--mail` for Mailpit).
-3. Frontend http://localhost:5173 (nginx proxies `/api` to the backend), backend http://localhost:8080, OpenAPI http://localhost:8080/v3/api-docs (local profile), Mailpit http://localhost:8025.
+3. Frontend http://localhost:5173 (nginx proxies `/api` to the backend), backend http://localhost:8080, OpenAPI JSON http://localhost:8080/v3/api-docs (local profile; no bundled Swagger UI, see documentations/06 MVP-ADR-15), Mailpit http://localhost:8025.
 4. Stop with `scripts/dev-down.sh` (data kept) or `scripts/dev-down.sh --purge` (deletes the database volume after confirmation).
 
 If a local PostgreSQL already listens on 5432, set `POSTGRES_HOST_PORT` (e.g. `55432`) in `.env`.

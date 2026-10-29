@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.portfolio.wallet.common.web.CorrelationId;
+import java.net.URI;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +66,18 @@ class SecurityConfigWebTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"));
     mvc.perform(get("/internal")).andExpect(status().isNotFound());
+  }
+
+  /** Encoded or non-canonical spellings of /internal are blocked too, not passed to MVC. */
+  @Test
+  void encodedInternalPathsDoNotExist() throws Exception {
+    for (String path :
+        new String[] {"/%69nternal/v1/x", "/%69nternal", "//internal/v1/x", "/internal;a=b/v1/x"}) {
+      // Absolute URI: the raw path is sent as written (a bare "//internal" would parse as a host).
+      mvc.perform(get(URI.create("http://localhost" + path)))
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"));
+    }
   }
 
   @Test

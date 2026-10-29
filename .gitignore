@@ -17,6 +17,8 @@ coverage/
 .env.*
 !.env.example
 frontend/.env.local
+# Personal Claude Code settings (permissions, local paths); the shared ones live in .claude/
+.claude/settings.local.json
 
 # Key and keystore files must never be committed (doc 03 §6.2)
 *.key
