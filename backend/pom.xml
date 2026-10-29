@@ -27,7 +27,7 @@
     <!-- 12.2.2, not 13.0.0: 13.0.0 sends an empty NVD API key when none is configured and NVD
          rejects it (dependency-check issue #8715, fixed upstream but not yet released). Move to
          the next 13.x release once it is available and verified to run without NVD_API_KEY. -->
-    <dependency-check.version>12.2.2</dependency-check.version>
+    <dependency-check.version>13.0.0</dependency-check.version>
   </properties>
 
   <dependencies>
