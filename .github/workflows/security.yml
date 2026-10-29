@@ -1,0 +1,113 @@
+name: Security
+
+# Free tools only: Gitleaks (secrets), OWASP Dependency-Check (Java), npm audit (frontend).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1" # weekly, Monday 03:00 UTC, to catch newly published vulnerabilities
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Gitleaks (full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # --redact masks matched values in the log; findings show only file, line and rule.
+      # The image is pinned by digest (multi-arch index of v8.30.1); update tag and digest together.
+      - name: Scan for secrets
+        run: >
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --redact --verbose --exit-code 1
+
+  java-dependencies:
+    name: OWASP Dependency-Check
+    runs-on: ubuntu-latest
+    # The first full NVD download can take hours even with an API key; GitHub-hosted jobs max out at 360.
+    timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # The NVD update and the scan are separate steps so that a completed update is cached even
+      # when the scan then fails on findings. A partial update is never cached.
+      - name: Restore NVD data
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: nvd-${{ runner.os }}-
+      - name: Update NVD data
+        id: nvd-update
+        timeout-minutes: 300
+        # Set the NVD_API_KEY repository secret. Without it the first NVD download takes hours and
+        # NVD rate limits (HTTP 429) usually make the update fail; cached NVD data keeps later runs short.
+        # An absent secret arrives as an empty string, which Dependency-Check rejects as an
+        # invalid key, so the variable is exported only when it has a value.
+        env:
+          OPTIONAL_NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -n "$OPTIONAL_NVD_API_KEY" ]; then
+            export NVD_API_KEY="$OPTIONAL_NVD_API_KEY"
+            echo "Using NVD API key from repository secret."
+          else
+            unset NVD_API_KEY
+            echo "::warning::No NVD_API_KEY secret configured; the NVD update may hit rate limits and fail."
+          fi
+          ./mvnw -B -Psecurity dependency-check:update-only
+      - name: Save NVD data
+        if: always() && steps.nvd-update.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ github.run_id }}
+      - name: Scan dependencies (fails on CVSS >= 7)
+        timeout-minutes: 30
+        run: ./mvnw -B -Psecurity verify -DskipTests -Dspotless.check.skip=true -DautoUpdate=false
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-check-report
+          path: backend/target/dependency-check-report.*
+          if-no-files-found: ignore
+
+  npm-audit:
+    name: npm audit (high and above)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      # Policy: the full report (all severities) is printed; high and critical fail the build.
+      # Do not add --omit, `npm audit fix --force` or continue-on-error to get green: fix the
+      # dependency, or document an accepted risk in documentations/06 and in the PR.
+      - name: npm audit (fails on high or critical)
+        run: npm audit --audit-level=high
