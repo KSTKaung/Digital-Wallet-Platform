@@ -1,0 +1,35 @@
+# Java / Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.log
+hs_err_pid*
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# Local configuration and secrets (dev values only; never commit real ones)
+.env
+.env.*
+!.env.example
+frontend/.env.local
+
+# Key and keystore files must never be committed (doc 03 §6.2)
+*.key
+*.p12
+*.jks
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Local backups of replaced config (recoverable copies; not part of the repo)
+.backup/

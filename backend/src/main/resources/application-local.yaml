@@ -1,0 +1,12 @@
+# Local development profile (SPRING_PROFILES_ACTIVE=local). DB_PASSWORD still comes from the
+# environment (.env); only non-secret defaults are set here.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/wallet}
+    username: ${DB_USERNAME:wallet}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

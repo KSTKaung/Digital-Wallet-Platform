@@ -1,0 +1,39 @@
+name: Containers
+
+on:
+  pull_request:
+    paths:
+      - "compose.yaml"
+      - ".env.example"
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/compose.yml"
+  push:
+    branches: [main]
+    paths:
+      - "compose.yaml"
+      - ".env.example"
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/compose.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Compose config and image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create CI-only .env from the template
+        run: cp .env.example .env
+      - name: Validate compose.yaml
+        run: docker compose --profile mail config --quiet
+      - name: Build backend and frontend images
+        run: docker compose build

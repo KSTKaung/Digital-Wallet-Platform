@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+# Windows scripts keep CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell scripts and the Maven wrapper run inside Linux containers and CI
+*.sh text eol=lf
+mvnw text eol=lf
+
+*.jar binary
+*.png binary
+*.ico binary
