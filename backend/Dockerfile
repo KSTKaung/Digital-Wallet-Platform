@@ -2,7 +2,7 @@
 # Backend image: build with the Maven Wrapper, run on a JRE as a non-root user.
 # Tests are not run here; CI runs ./mvnw verify before images are built.
 
-FROM eclipse-temurin:21.0.12.1_1-jdk AS build
+FROM eclipse-temurin:24.0.2_12-jdk AS build
 # unzip lets the wrapper use the .zip distribution whose SHA-256 is pinned in
 # .mvn/wrapper/maven-wrapper.properties (without it, mvnw falls back to .tar.gz and the check fails).
 RUN apt-get update \
@@ -18,7 +18,7 @@ COPY src/ src/
 RUN ./mvnw -B -q -DskipTests package \
  && java -Djarmode=tools -jar target/wallet-*.jar extract --layers --launcher --destination extracted
 
-FROM eclipse-temurin:21.0.12.1_1-jre
+FROM eclipse-temurin:24.0.2_12-jre
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 WORKDIR /app
 
