@@ -36,8 +36,12 @@ flowchart TD
     DOCS --> SQ{"Touches auth/tokens, money,<br/>security config, error responses,<br/>wallet/ledger/transfer migrations?"}
     SQ -- "yes" --> SR["<b>security-reviewer</b> (read-only)<br/>+ secure-wallet-transfer checklist"]
     SQ -- "no" --> VERIFY
+    DOCS --> DQ{"Adds or changes a schema,<br/>Flyway migration, constraint<br/>or trigger?"}
+    DQ -- "yes" --> DR["<b>database-reviewer</b> (read-only)<br/>schema per module · money types · constraints<br/>ledger triggers · locking · migration safety"]
+    DQ -- "no" --> VERIFY
     CR --> VERIFY
     SR --> VERIFY
+    DR --> VERIFY
 
     VERIFY["Main session verifies each finding<br/>against the code: confirmed / dismissed"]
     VERIFY --> G2{"Confirmed findings?"}
@@ -48,8 +52,8 @@ flowchart TD
     classDef ro fill:#f5f5f5,stroke:#6b7280,color:#111827;
     classDef gate fill:#fff7ed,stroke:#f97316,color:#7c2d12;
     class PLAN,DOCS,S_API,S_DB,S_MONEY skill;
-    class CR,SR ro;
-    class G1,ROUTE,TR,SQ,G2 gate;
+    class CR,SR,DR ro;
+    class G1,ROUTE,TR,SQ,DQ,G2 gate;
 ```
 
 ## 2. Responsibility map
@@ -69,6 +73,7 @@ flowchart LR
     subgraph READ["Read-only reviewers"]
         CR["code-reviewer"]
         SR["security-reviewer"]
+        DR["database-reviewer"]
     end
 
     subgraph SKILLS["Skills"]
@@ -82,7 +87,7 @@ flowchart LR
 
     MAIN -.-> PF
     MAIN -.-> AD
-    MAIN --> BE & FE & TE & CR & SR
+    MAIN --> BE & FE & TE & CR & SR & DR
 
     BE --> API
     BE --> DB
@@ -92,6 +97,7 @@ flowchart LR
     FE --> TW
     TE --> TW
     SR --> MONEY
+    DR --> DB
 
     API -.->|"schema step"| DB
     API -.->|"test step"| TW
@@ -108,6 +114,7 @@ flowchart LR
 | `test-engineer` | test code only | test plan, coverage of rules and failure paths, real results | implementer (product bugs) |
 | `code-reviewer` | nothing | correctness, module boundaries, contract, test gaps | `security-reviewer` for security issues |
 | `security-reviewer` | nothing | auth, ownership, money integrity, web surface, data exposure | main session (verify findings) |
+| `database-reviewer` | nothing | schema per module, keys, money types, constraints, indexes, ledger and audit triggers, locking support, idempotency tables, migration safety | main session (verify findings), `backend-engineer` for fixes |
 
 | Skill | Used when | Produces |
 | --- | --- | --- |
@@ -127,5 +134,6 @@ flowchart LR
 | Destructive or long-locking migration | user | drop/rename/narrow, data deletion, ledger trigger/grants, hot-table locks |
 | New or upgraded dependency or infrastructure | user | any (doc 06 excludes Kafka, Redis, gateway, service discovery, mTLS) |
 | Security review | required | auth/tokens/OTP, RBAC/ownership, money, security config, error responses, wallet/ledger/transfer migrations |
+| Database review | required | any new or changed Flyway migration, schema, constraint, index or trigger; data-requirement extraction (documentations/07) |
 | Findings | main session | each finding re-checked against code before fixing |
 | Commit, push, merge, deploy | user | always explicit approval |
