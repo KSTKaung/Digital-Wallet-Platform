@@ -20,9 +20,16 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # react and react-dom must have the same version; listed first so this group takes them.
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       dev-tooling:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # typescript-eslint 8.x accepts only typescript < 6.1; revisit when it supports 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
