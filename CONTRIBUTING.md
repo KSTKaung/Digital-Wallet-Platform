@@ -68,7 +68,7 @@ documentations/   01–05 target architecture; 06 MVP decisions (governs the MVP
 | Dependency vulnerability scan (set the free `NVD_API_KEY`; without it the first NVD download takes hours and can fail with HTTP 429) | `./mvnw -Psecurity verify -DskipTests` |
 
 ### Local stack (repository root)
-1. `cp .env.example .env` and set your own `DB_PASSWORD`.
+1. `cp .env.example .env` and set your own `POSTGRES_SUPERUSER_PASSWORD` (bootstrap superuser `wallet`, which runs the init script; the application never uses it), `WALLET_OWNER_PASSWORD` (Flyway, owns the schemas) and `WALLET_APP_PASSWORD` (runtime, DML only). The PostgreSQL init script creates both roles only when the volume is first created; if you have a volume from before PR 2, recreate it with `scripts/dev-down.sh --purge` (this deletes local data).
 2. `docker compose up -d --build --wait` (or `scripts/dev-up.sh`, add `--mail` for Mailpit).
 3. Frontend http://localhost:5173 (nginx proxies `/api` to the backend), backend http://localhost:8080, OpenAPI JSON http://localhost:8080/v3/api-docs (local profile; no bundled Swagger UI, see documentations/06 MVP-ADR-15), Mailpit http://localhost:8025.
 4. Stop with `scripts/dev-down.sh` (data kept) or `scripts/dev-down.sh --purge` (deletes the database volume after confirmation).

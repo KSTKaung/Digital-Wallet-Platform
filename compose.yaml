@@ -10,16 +10,26 @@ services:
     image: postgres:18.6-alpine
     environment:
       POSTGRES_DB: wallet
+      # Bootstrap superuser: used only by this container (init scripts, healthcheck), never by
+      # the backend (documentations/06 MVP-ADR-02).
       POSTGRES_USER: wallet
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?Set POSTGRES_SUPERUSER_PASSWORD in .env}
+      # Read by infra/postgres/init/01-create-roles.sh to create wallet_owner and wallet_app.
+      WALLET_OWNER_PASSWORD: ${WALLET_OWNER_PASSWORD:?Set WALLET_OWNER_PASSWORD in .env}
+      WALLET_APP_PASSWORD: ${WALLET_APP_PASSWORD:?Set WALLET_APP_PASSWORD in .env}
     ports:
       # Override POSTGRES_HOST_PORT if a local PostgreSQL already uses 5432. The backend connects
       # over the Compose network, so it is unaffected.
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
+      # Init scripts run ONLY when the data volume is empty (first start). An existing volume
+      # keeps its old roles: it must be recreated to run them (documentations/08 Q5).
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wallet -d wallet"]
+      # TCP, not the Unix socket: during initialisation (init scripts) the server listens on the
+      # socket only, so the container is not reported healthy before the roles exist.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U wallet -d wallet"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -29,8 +39,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       DB_URL: jdbc:postgresql://postgres:5432/wallet
-      DB_USERNAME: wallet
-      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      # Runtime role (DML only, not a superuser); Flyway migrates as the schema owner.
+      DB_USERNAME: wallet_app
+      DB_PASSWORD: ${WALLET_APP_PASSWORD:?Set WALLET_APP_PASSWORD in .env}
+      FLYWAY_USERNAME: wallet_owner
+      FLYWAY_PASSWORD: ${WALLET_OWNER_PASSWORD:?Set WALLET_OWNER_PASSWORD in .env}
       APP_CORS_ALLOWED_ORIGINS: http://localhost:5173
     ports:
       - "127.0.0.1:8080:8080"

@@ -19,6 +19,7 @@ Portfolio MVP of a digital wallet: **one modular Spring Boot application** (`bac
 | `04. OperationsDevOps.md` | quality gates, CI expectations, target operations model |
 | `05. ProductBusiness.md` | requirements, acceptance criteria, business rules (§4) |
 | `07. DatabaseRequirements.md` | consolidated database and financial-domain requirements (Draft), tagged documented / ADR / recommendation / open, with the unresolved decisions for PR 2–5 |
+| `08. DeliveryPlan.md` | PR sequence and status, the planning and delivery procedure, and every accepted PR plan (update it whenever the owner accepts a plan or a PR is merged) |
 
 ## Commands
 
@@ -47,9 +48,9 @@ Full stack: copy `.env.example` to `.env`, then `docker compose up -d --build --
 
 ### Money and security rules (doc 06 MVP-ADR-03, -06, -08, -10, -13, -19)
 - A money movement is **one database transaction**: take locks in one order (idempotency row → transfer row for review actions → both wallets `FOR UPDATE` in ascending id order, in one SQL statement → daily-limit usage rows), check balance and limits, update snapshots (with the optimistic `version` check), post the balanced ledger transaction, write the business record and audit row, commit. `ledgerStatus` is `POSTED` and is returned only after commit. Notifications run after commit.
-- Ledger entries, audit rows and risk reviews are append-only (DB triggers reject UPDATE/DELETE/TRUNCATE, and the runtime role `wallet_app` has only SELECT/INSERT on them; MVP-ADR-02); Σ DEBIT = Σ CREDIT; amount > 0; unique `transaction_reference`; corrections by reversal.
+- Ledger transactions and entries, deposits, withdrawals, risk assessments, rule hits and reviews, and audit rows are append-only (DB triggers reject UPDATE/DELETE/TRUNCATE, and the runtime role `wallet_app` has only SELECT/INSERT on them); wallets, daily limit usage, transfers, ledger accounts, investigations and sender risk state are never deleted (full list in MVP-ADR-02); Σ DEBIT = Σ CREDIT; amount > 0; unique `transaction_reference`; corrections by reversal.
 - `Idempotency-Key` (UUID) is required on money POSTs and stored in PostgreSQL; same key + different body → `409 IDEMPOTENCY_KEY_REUSED`.
-- Money is `BigDecimal` / `NUMERIC(19,2)`, at most 2 decimals (more is rejected, never rounded), THB only (MVP-ADR-21). Limits come from configuration, never literals (values in MVP-ADR-18); daily limits use the Asia/Bangkok day (MVP-ADR-22). Undefined values are an open question, not something to invent.
+- Money is `BigDecimal` / `NUMERIC(19,2)`, at most 2 decimals (a non-zero third decimal is rejected, never rounded; trailing zeros are accepted), THB only (MVP-ADR-21). Limits come from configuration, never literals (values in MVP-ADR-18); daily limits use the Asia/Bangkok day (MVP-ADR-22). Undefined values are an open question, not something to invent.
 - Wallet exists only after KYC approval: before it, `GET /api/v1/wallet` → `404 WALLET_NOT_FOUND`, money endpoints → `403 KYC_REQUIRED`.
 - **No existence disclosure:** use `ApiException.notFound()` for both missing and other users' resources; 401 responses are identical for every path; validation messages name the field, never the value.
 - Error body `{success:false, errorCode, message, correlationId, timestamp}`. A new error code needs a doc 06 entry.
@@ -79,4 +80,4 @@ Start each PR or feature with `plan-feature` and get the plan accepted before im
 - **Ask first** when the docs are silent or conflict, and before: changing documented financial/security values or doc 06 decisions, destructive or long-locking migrations, editing a merged migration, adding/upgrading dependencies or infrastructure, or dropping/resetting databases.
 
 ## Git
-Trunk-based on `main`; branch prefixes `feature/`, `fix/`, `chore/`, `refactor/`, `spike/`, `hotfix/`; Conventional Commits (PR titles checked by commitlint); squash merge. **Never commit, push, merge or deploy without the owner's explicit approval.** Coverage target ≥ 80% on domain and application layers (gate enabled once domain code exists).
+Trunk-based on `main`; branch prefixes `feature/`, `fix/`, `chore/`, `refactor/`, `spike/`, `hotfix/`; Conventional Commits (PR titles checked by commitlint); squash merge. **Never commit, push, merge or deploy without the owner's explicit approval.** Coverage target ≥ 80% on domain and application layers: the JaCoCo gate in `backend/pom.xml` enforces it on `*.domain` and `common.money` (application packages are added when they get code).

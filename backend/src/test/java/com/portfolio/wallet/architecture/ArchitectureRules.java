@@ -26,6 +26,7 @@ final class ArchitectureRules {
           "wallet",
           "transfer",
           "ledger",
+          "risk",
           "transaction",
           "notification",
           "audit",
@@ -67,6 +68,27 @@ final class ArchitectureRules {
             "..persistence..",
             "org.springframework.web..",
             "jakarta.servlet..");
+  }
+
+  /**
+   * The financial core and {@code Money} are pure Java (documentations/06 MVP-ADR-07): no JPA,
+   * Hibernate or Spring. JPA entities and mappers live in {@code persistence}. The rule must match
+   * at least one class, so it cannot pass vacuously.
+   */
+  static ArchRule financialDomainIsFrameworkFree() {
+    return noClasses()
+        .that()
+        .resideInAnyPackage(
+            "..wallet.domain..",
+            "..transfer.domain..",
+            "..ledger.domain..",
+            "..risk.domain..",
+            "..common.money..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage("jakarta.persistence..", "org.hibernate..", "org.springframework..")
+        .allowEmptyShould(false)
+        .because("financial domain models are pure Java (documentations/06 MVP-ADR-07)");
   }
 
   /** Other modules may use a module only through its application package. */

@@ -11,9 +11,14 @@ spring:
       enabled: true
   datasource:
     # Empty defaults: startup fails fast without a database unless a test supplies one.
+    # The runtime role is wallet_app: DML only, no ownership, not a superuser (doc 06 MVP-ADR-02).
     url: ${DB_URL:}
     username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
+    hikari:
+      data-source-properties:
+        # PostgreSQL error detail can contain row values; keep it out of exceptions and logs.
+        logServerErrorDetail: false
   jpa:
     open-in-view: false
     hibernate:
@@ -21,6 +26,19 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # Flyway runs as the migration owner (wallet_owner), the application as wallet_app.
+    # Empty defaults on purpose: Spring Boot falls back to the application DataSource only when
+    # spring.flyway.user is null. An empty value is not null, so Flyway builds its own DataSource
+    # with an empty user name and startup fails at the first connection, instead of silently
+    # migrating as the runtime role.
+    user: ${FLYWAY_USERNAME:}
+    password: ${FLYWAY_PASSWORD:}
+    # Keeps flyway_schema_history out of "public"; Flyway creates this schema itself (doc 08 Q6).
+    default-schema: flyway
+    placeholders:
+      # Role that V1 grants schema usage and default table privileges to. Brackets keep the "_":
+      # without them Spring Boot's relaxed binding drops it and the key becomes "approle".
+      "[app_role]": ${DB_APP_ROLE:wallet_app}
 
 server:
   port: ${SERVER_PORT:8080}
