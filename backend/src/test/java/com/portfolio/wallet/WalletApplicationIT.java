@@ -7,28 +7,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.portfolio.wallet.common.web.CorrelationId;
+import com.portfolio.wallet.support.PostgresTestDatabase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** Full application against a real PostgreSQL (Testcontainers). Requires Docker. */
+/**
+ * Full application against a real PostgreSQL (Testcontainers, provisioned by {@link
+ * PostgresTestDatabase}). Requires Docker.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
 class WalletApplicationIT {
 
-  @Container @ServiceConnection
-  static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18.6-alpine");
+  @DynamicPropertySource
+  static void database(DynamicPropertyRegistry registry) {
+    PostgresTestDatabase.register(registry);
+  }
 
   @Autowired MockMvc mvc;
 

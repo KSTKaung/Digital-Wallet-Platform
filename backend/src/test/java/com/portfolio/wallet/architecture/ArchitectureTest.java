@@ -31,6 +31,11 @@ class ArchitectureTest {
   }
 
   @Test
+  void financialDomainIsFrameworkFree() {
+    ArchitectureRules.financialDomainIsFrameworkFree().check(CLASSES);
+  }
+
+  @Test
   void moduleInternalsArePrivate() {
     ArchitectureRules.moduleInternalsArePrivate(ROOT).check(CLASSES);
   }

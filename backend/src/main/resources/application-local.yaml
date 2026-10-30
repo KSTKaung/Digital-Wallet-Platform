@@ -1,9 +1,14 @@
-# Local development profile (SPRING_PROFILES_ACTIVE=local). DB_PASSWORD still comes from the
-# environment (.env); only non-secret defaults are set here.
+# Local development profile (SPRING_PROFILES_ACTIVE=local). Only non-secret defaults are set here;
+# the passwords always come from the environment: DB_PASSWORD is wallet_app's password and
+# FLYWAY_PASSWORD is wallet_owner's. Under Compose the backend gets them from WALLET_APP_PASSWORD
+# and WALLET_OWNER_PASSWORD in .env. POSTGRES_SUPERUSER_PASSWORD in .env is the bootstrap
+# superuser's password (postgres container only). Never default to the bootstrap superuser.
 spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/wallet}
-    username: ${DB_USERNAME:wallet}
+    username: ${DB_USERNAME:wallet_app}
+  flyway:
+    user: ${FLYWAY_USERNAME:wallet_owner}
 
 springdoc:
   api-docs:

@@ -4,8 +4,9 @@
 # Prerequisites:
 #   - Docker Desktop (or Docker Engine) running, with Compose v2 (`docker compose version`)
 #   - Bash: Git Bash on Windows, any shell on macOS/Linux
-#   - .env in the repository root, created with `cp .env.example .env` and your own DB_PASSWORD
-#     (set POSTGRES_HOST_PORT if a local PostgreSQL already uses 5432)
+#   - .env in the repository root, created with `cp .env.example .env` and your own
+#     POSTGRES_SUPERUSER_PASSWORD, WALLET_OWNER_PASSWORD and WALLET_APP_PASSWORD (set
+#     POSTGRES_HOST_PORT if a local PostgreSQL already uses 5432)
 #
 # Usage: scripts/dev-up.sh [--mail]
 #   --mail   also start Mailpit (SMTP localhost:1025, UI http://localhost:8025)
