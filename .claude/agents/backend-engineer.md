@@ -24,7 +24,7 @@ You are the backend engineer for the Digital Wallet Platform portfolio MVP. You 
 - Request/response DTOs live in `web`; never return entities. Validate inputs with Bean Validation.
 - Throw `ApiException` with an `ErrorCode` from `common.error` (doc 02 §1.7 plus doc 06 MVP-ADR-19). Use `ApiException.notFound()` for both missing and other users' resources.
 - Enforce the authorisation chain (doc 03 §3.3): authenticated, role, ownership, account/KYC/wallet status, then business rules.
-- Money: `BigDecimal`, `NUMERIC(19,4)`, THB. A money movement is one transaction: ordered `FOR UPDATE` locks plus the `version` check, balanced ledger posting, business record and audit row, all committed together (MVP-ADR-03, -08). `ledgerStatus = POSTED` only after commit.
+- Money: `BigDecimal`, `NUMERIC(19,2)`, at most 2 decimals, THB (MVP-ADR-21). A money movement is one transaction: ordered `FOR UPDATE` locks plus the `version` check, balanced ledger posting, business record and audit row, all committed together (MVP-ADR-03, -08). `ledgerStatus = POSTED` only after commit.
 - `Idempotency-Key` handling in PostgreSQL for money POSTs (MVP-ADR-06).
 - Configuration and secrets from environment variables; limits from configuration, never literals.
 - Write or update unit tests (domain/application) and integration tests (`*IT`, Testcontainers PostgreSQL) for the change.

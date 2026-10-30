@@ -29,7 +29,7 @@ documentations/   01–05 target architecture; 06 MVP decisions (governs the MVP
 ## Backend conventions
 - One application, organised by module: `com.portfolio.wallet.<module>.{web,application,domain,persistence}`. Other modules are used only through their `application` package. ArchUnit enforces this in `./mvnw test`.
 - One PostgreSQL database, one schema per module; no cross-schema joins or foreign keys.
-- Money is `BigDecimal` / `NUMERIC(19,4)`; never floating point. Money movements are one database transaction (documentations/06 MVP-ADR-03, -08).
+- Money is `BigDecimal` / `NUMERIC(19,2)`, at most 2 decimals (documentations/06 MVP-ADR-21); never floating point. Money movements are one database transaction (documentations/06 MVP-ADR-03, -08).
 - Errors: `ApiException` + `ErrorCode` (`common.error`); `ApiException.notFound()` for missing and other users' resources.
 - Flyway migrations in `src/main/resources/db/migration`; **never edit a merged migration**.
 - Formatting: Spotless (google-java-format), checked in `./mvnw verify`.
