@@ -8,6 +8,11 @@ updates:
     groups:
       spring-boot:
         patterns: ["org.springframework.boot:*"]
+    ignore:
+      # Pinned to 12.2.x: 13.0.0 fails the scan when no NVD key is set (documentations/06
+      # MVP-ADR-15). Remove this once a 13.x release is verified to run without a key.
+      - dependency-name: "org.owasp:dependency-check-maven"
+        versions: [">= 13.0.0"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -28,6 +33,10 @@ updates:
     directories: ["/backend", "/frontend"]
     schedule:
       interval: weekly
+    ignore:
+      # The backend targets Java 21 LTS (documentations/06 MVP-ADR-15); a new major needs an ADR.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker-compose
     directory: /
