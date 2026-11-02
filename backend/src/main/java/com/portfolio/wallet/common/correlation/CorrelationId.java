@@ -1,10 +1,14 @@
-package com.portfolio.wallet.common.web;
+package com.portfolio.wallet.common.correlation;
 
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.slf4j.MDC;
 
-/** Correlation ID header and MDC key shared by filters, error handling and logs. */
+/**
+ * Correlation ID header and MDC key shared by filters, error handling, audit and logs. Outside
+ * {@code common.web} so that application services may read it: ArchUnit forbids application code
+ * from depending on a web package.
+ */
 public final class CorrelationId {
 
   public static final String HEADER = "X-Correlation-Id";

@@ -58,7 +58,8 @@ class TableProtectionIT extends DatabaseIntegrationTest {
         new ProtectedTable("ledger.ledger_accounts", "id", "status"),
         new ProtectedTable("risk.investigations", "id", "outcome"),
         // Per-sender lock rows: never deleted (owner, 2026-10-30; PrivilegesIT NO_DELETE).
-        new ProtectedTable("risk.sender_risk_state", "customer_id", "updated_at"));
+        new ProtectedTable("risk.sender_risk_state", "customer_id", "updated_at"),
+        new ProtectedTable("auth.credentials", "user_id", "failed_login_count"));
   }
 
   // Append-only tables, as wallet_app ---------------------------------------------------------
@@ -350,6 +351,20 @@ class TableProtectionIT extends DatabaseIntegrationTest {
             "risk.investigations",
             row("id", id, "assessment_id", newRiskAssessment(), "opened_at", OffsetDateTime.now()));
         yield id;
+      }
+      case "auth.users" -> newUser();
+      case "auth.credentials" -> {
+        UUID user = newUser();
+        insert(
+            "auth.credentials",
+            row(
+                "user_id",
+                user,
+                "password_hash",
+                "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
+                "password_changed_at",
+                OffsetDateTime.now()));
+        yield user;
       }
       default -> throw new IllegalArgumentException("no fixture for " + table.name());
     };

@@ -22,6 +22,10 @@
     <!-- Not managed by the Spring Boot BOM; pinned explicitly (documentations/06 MVP-ADR-15). -->
     <springdoc.version>3.2.0</springdoc.version>
     <archunit.version>1.5.1</archunit.version>
+    <!-- Argon2id for Spring Security's Argon2PasswordEncoder (documentations/06 MVP-ADR-23). The
+         Boot BOM does not manage Bouncy Castle and spring-security-crypto leaves it to the
+         application, so it is pinned here; 1.86 is the current release. -->
+    <bouncycastle.version>1.86</bouncycastle.version>
     <spotless.version>3.10.4</spotless.version>
     <jacoco.version>0.8.16</jacoco.version>
     <!-- 12.2.2, not 13.0.0: 13.0.0 sends an empty NVD API key when none is configured and NVD
@@ -42,6 +46,20 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <!-- Boot 4 name; spring-boot-starter-oauth2-resource-server is its deprecated alias. -->
+      <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -156,7 +174,8 @@
             </goals>
           </execution>
           <!-- Coverage gate (CLAUDE.md): at least 80% line coverage from unit tests on the domain
-               packages and common.money. Application packages are added when they get code. -->
+               packages, common.money and the application packages that have code so far. Further
+               application packages are added when they get code. -->
           <execution>
             <id>coverage-gate</id>
             <phase>verify</phase>
@@ -170,6 +189,9 @@
                   <includes>
                     <include>com.portfolio.wallet.*.domain</include>
                     <include>com.portfolio.wallet.common.money</include>
+                    <include>com.portfolio.wallet.audit.application</include>
+                    <include>com.portfolio.wallet.notification.application</include>
+                    <include>com.portfolio.wallet.auth.application</include>
                   </includes>
                   <limits>
                     <limit>

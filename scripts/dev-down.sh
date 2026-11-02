@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 
 case "${1:-}" in
   "")
-    docker compose --profile mail down
+    docker compose down
     ;;
   --purge)
     read -r -p "This deletes ALL local database data (volume pgdata). Type 'purge' to continue: " answer
@@ -19,7 +19,7 @@ case "${1:-}" in
       echo "Aborted; nothing was deleted."
       exit 1
     fi
-    docker compose --profile mail down --volumes
+    docker compose down --volumes
     ;;
   -h | --help) sed -n '2,8p' "$0" ;;
   *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;

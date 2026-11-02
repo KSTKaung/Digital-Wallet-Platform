@@ -20,6 +20,7 @@ Portfolio MVP of a digital wallet: **one modular Spring Boot application** (`bac
 | `05. ProductBusiness.md` | requirements, acceptance criteria, business rules (§4) |
 | `07. DatabaseRequirements.md` | consolidated database and financial-domain requirements (Draft), tagged documented / ADR / recommendation / open, with the unresolved decisions for PR 2–5 |
 | `08. DeliveryPlan.md` | PR sequence and status, the planning and delivery procedure, and every accepted PR plan (update it whenever the owner accepts a plan or a PR is merged) |
+| `08a. PrReviewRecord.md` | per-PR history: decisions, review findings, fixes, dismissals and open risks |
 
 ## Commands
 
@@ -36,14 +37,14 @@ Backend (in `backend/`; on Windows use `.\mvnw.cmd`). Requires JDK 21; integrati
 
 Frontend (in `frontend/`, Node ≥ 22.12): `npm ci` · `npm run dev` · `npm run typecheck` · `npm run lint` · `npm run format:check` · `npm test` · one file `npm test -- src/api/client.test.ts` · one test `npm test -- -t "<name>"` · `npm run build`.
 
-Full stack: copy `.env.example` to `.env`, then `docker compose up -d --build --wait` (or `scripts/dev-up.sh`; `scripts/dev-down.sh`, `--purge` deletes the DB volume after confirmation). Ports: frontend 5173 (nginx proxies `/api` to the backend), backend 8080, PostgreSQL 5432 (set `POSTGRES_HOST_PORT` if a local PostgreSQL already uses it), Mailpit 1025/8025 (`--profile mail`). All ports bind to 127.0.0.1.
+Full stack: copy `.env.example` to `.env`, paste the output of `scripts/generate-dev-secrets.sh` into it (the backend refuses to start without those secrets), then `docker compose up -d --build --wait` (or `scripts/dev-up.sh`; `scripts/dev-down.sh`, `--purge` deletes the DB volume after confirmation). Ports: frontend 5173 (nginx proxies `/api` to the backend), backend 8080, PostgreSQL 5432 (set `POSTGRES_HOST_PORT` if a local PostgreSQL already uses it), Mailpit 1025/8025. All ports bind to 127.0.0.1.
 
 ## Architecture
 
 - Root package `com.portfolio.wallet`. Modules: `auth`, `user` (profile + minimal KYC), `wallet`, `transfer`, `ledger`, `transaction` (read-only history), `notification`, `audit`, `admin`, `risk` (risk scoring and manual review, MVP-ADR-24), and shared `common`.
 - Inside a module, only where needed: `web` (controllers, DTOs, DTO mappers) → `application` (services, `@Transactional` boundaries) → `domain` ← `persistence` (Spring Data repositories, JPA entities).
 - **Enforced by ArchUnit** (`backend/src/test/java/.../architecture`): layer direction; other modules may use a module only through its `application` package; no cycles between modules; `common` depends on no module; domain has no web/servlet/application/persistence dependencies; controllers never return entities; no field injection; no `System.out`/`java.util.logging`. `ArchitectureRulesSelfTest` proves the rules catch violations. Don't weaken a rule to make code pass; propose an ADR in doc 06 instead.
-- `common.error`: `ErrorCode` (doc 02 §1.7 codes plus MVP-ADR-19 additions) and `ApiException`. `common.web`: error body, `GlobalExceptionHandler`, correlation ID filter, `/internal/**` 404 filter. `common.security`: deny-by-default `SecurityConfig`, CORS, JSON 401/403.
+- `common.error`: `ErrorCode` (doc 02 §1.7 codes plus MVP-ADR-19 additions) and `ApiException`. `common.correlation`: correlation ID. `common.time`: `Clock` bean. `common.web`: error body, `GlobalExceptionHandler`, `ErrorController`, correlation ID filter, `/internal/**` 404 filter. `common.security`: deny-by-default `SecurityConfig`, CORS, JSON 401/403.
 - One database, **one schema per module**, one Flyway stream in `backend/src/main/resources/db/migration`; no cross-schema foreign keys or joins.
 
 ### Money and security rules (doc 06 MVP-ADR-03, -06, -08, -10, -13, -19)
@@ -80,4 +81,4 @@ Start each PR or feature with `plan-feature` and get the plan accepted before im
 - **Ask first** when the docs are silent or conflict, and before: changing documented financial/security values or doc 06 decisions, destructive or long-locking migrations, editing a merged migration, adding/upgrading dependencies or infrastructure, or dropping/resetting databases.
 
 ## Git
-Trunk-based on `main`; branch prefixes `feature/`, `fix/`, `chore/`, `refactor/`, `spike/`, `hotfix/`; Conventional Commits (PR titles checked by commitlint); squash merge. **Never commit, push, merge or deploy without the owner's explicit approval.** Coverage target ≥ 80% on domain and application layers: the JaCoCo gate in `backend/pom.xml` enforces it on `*.domain` and `common.money` (application packages are added when they get code).
+Trunk-based on `main`; branch prefixes `feature/`, `fix/`, `chore/`, `refactor/`, `spike/`, `hotfix/`; Conventional Commits (PR titles checked by commitlint); squash merge. **Never commit, push, merge or deploy without the owner's explicit approval.** Coverage target ≥ 80% on domain and application layers: the JaCoCo gate in `backend/pom.xml` enforces it on `*.domain`, `common.money` and the application packages that have code (`auth`, `audit`, `notification`; others are added when they get code).

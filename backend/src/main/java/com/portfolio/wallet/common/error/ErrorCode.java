@@ -7,7 +7,8 @@ import org.springframework.http.HttpStatus;
  *
  * <p>{@link #VALIDATION_ERROR}, {@link #UNAUTHORIZED}, {@link #FORBIDDEN}, {@link #NOT_FOUND} and
  * {@link #METHOD_NOT_ALLOWED} are MVP additions for generic framework errors that doc 02 maps to a
- * status but does not name (documentations/06, pending approval).
+ * status but does not name (documentations/06 MVP-ADR-19, which also adds {@link #RATE_LIMITED},
+ * {@link #UNSUPPORTED_MEDIA_TYPE} and {@link #INVALID_TRANSFER_STATE}).
  */
 public enum ErrorCode {
   // Generic (MVP additions)
@@ -16,6 +17,8 @@ public enum ErrorCode {
   FORBIDDEN(HttpStatus.FORBIDDEN),
   NOT_FOUND(HttpStatus.NOT_FOUND),
   METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),
+  UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+  RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
 
   // Wallet and money movement
   INSUFFICIENT_BALANCE(HttpStatus.CONFLICT),
@@ -24,6 +27,7 @@ public enum ErrorCode {
   WALLET_FROZEN(HttpStatus.CONFLICT),
   WALLET_NOT_FOUND(HttpStatus.NOT_FOUND),
   SELF_TRANSFER(HttpStatus.CONFLICT),
+  INVALID_TRANSFER_STATE(HttpStatus.CONFLICT),
   BENEFICIARY_BLOCKED(HttpStatus.CONFLICT),
   RISK_BLOCKED(HttpStatus.FORBIDDEN),
   INVALID_AMOUNT(HttpStatus.BAD_REQUEST),
@@ -37,6 +41,8 @@ public enum ErrorCode {
 
   // Authentication
   INVALID_OTP(HttpStatus.BAD_REQUEST),
+  // The next three stay in the contract but are unused by decision: every OTP failure is
+  // INVALID_OTP and a locked account gets the same 401 as a wrong password (MVP-ADR-23).
   OTP_EXPIRED(HttpStatus.BAD_REQUEST),
   OTP_ATTEMPTS_EXCEEDED(HttpStatus.BAD_REQUEST),
   ACCOUNT_LOCKED(HttpStatus.FORBIDDEN),

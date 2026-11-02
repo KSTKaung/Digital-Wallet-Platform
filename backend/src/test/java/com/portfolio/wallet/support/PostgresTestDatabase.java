@@ -44,12 +44,26 @@ public final class PostgresTestDatabase {
   private static final String OWNER_PASSWORD = UUID.randomUUID().toString();
   private static final String APP_PASSWORD = UUID.randomUUID().toString();
 
+  private static final int UNTRIPPABLE_LIMIT = 1_000_000;
+
   private static final PostgreSQLContainer CONTAINER = createContainer();
 
   private PostgresTestDatabase() {}
 
-  /** Registers the datasource ({@code wallet_app}) and Flyway ({@code wallet_owner}) properties. */
+  /**
+   * Registers the datasource ({@code wallet_app}) and Flyway ({@code wallet_owner}) properties, and
+   * the required secrets: every full application context in the tests starts through this method.
+   */
   public static void register(DynamicPropertyRegistry registry) {
+    registerWithRealLimits(registry);
+    // Raised so that no flow test trips the limiter by accident; the limiter has its own tests.
+    registry.add("app.rate-limit.auth-requests-per-minute-per-ip", () -> UNTRIPPABLE_LIMIT);
+    registry.add("app.rate-limit.other-requests-per-minute-per-user", () -> UNTRIPPABLE_LIMIT);
+    registry.add("app.auth.purge.enabled", () -> false);
+  }
+
+  /** For a test that sets its own limits: dynamic properties outrank the test's inline ones. */
+  public static void registerWithRealLimits(DynamicPropertyRegistry registry) {
     start();
     registry.add("spring.datasource.url", CONTAINER::getJdbcUrl);
     registry.add("spring.datasource.username", () -> APP_ROLE);
@@ -57,6 +71,7 @@ public final class PostgresTestDatabase {
     registry.add("spring.flyway.user", () -> OWNER_ROLE);
     registry.add("spring.flyway.password", () -> OWNER_PASSWORD);
     registry.add("spring.flyway.placeholders[app_role]", () -> APP_ROLE);
+    TestSecrets.values().forEach((name, value) -> registry.add(name, () -> value));
   }
 
   /** Test fixtures only: a connection as the container's bootstrap superuser. */
