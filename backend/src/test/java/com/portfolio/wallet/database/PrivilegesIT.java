@@ -63,7 +63,46 @@ class PrivilegesIT extends DatabaseIntegrationTest {
           entry("transfer.idempotency_records", PURGEABLE),
           entry("wallet.lookup_attempts", APPEND_AND_PURGE),
           // Per-sender lock rows: never deleted (owner, 2026-10-30).
-          entry("risk.sender_risk_state", NO_DELETE));
+          entry("risk.sender_risk_state", NO_DELETE),
+          // UPDATE only on the columns in AUTH_UPDATABLE_COLUMNS, so has_table_privilege is false.
+          entry("auth.users", APPEND_AND_PURGE),
+          entry("auth.owner_notices", APPEND_ONLY),
+          entry("auth.credentials", APPEND_ONLY),
+          entry("auth.password_history", APPEND_AND_PURGE),
+          entry("auth.login_failure_counters", APPEND_AND_PURGE),
+          entry("auth.sessions", APPEND_AND_PURGE),
+          entry("auth.refresh_tokens", APPEND_AND_PURGE),
+          entry("auth.otp_challenges", APPEND_AND_PURGE),
+          entry("auth.password_reset_tokens", APPEND_AND_PURGE));
+
+  private static final Map<String, Set<String>> AUTH_UPDATABLE_COLUMNS =
+      Map.of(
+          "auth.users", Set.of("phone_number", "status"),
+          "auth.credentials",
+              Set.of("password_hash", "failed_login_count", "locked_until", "password_changed_at"),
+          "auth.password_history", Set.of(),
+          "auth.owner_notices", Set.of("last_sent_at"),
+          "auth.login_failure_counters", Set.of("failed_count", "locked_until"),
+          "auth.sessions", Set.of("last_seen_at", "revoked_at", "revoked_reason"),
+          "auth.refresh_tokens", Set.of("used_at", "revoked_at"),
+          "auth.otp_challenges", Set.of("attempts", "consumed_at", "cancelled_at", "used_up_at"),
+          "auth.password_reset_tokens", Set.of("used_at"));
+
+  @Test
+  void authTablesAllowUpdateOfTheIntendedColumnsOnly() {
+    AUTH_UPDATABLE_COLUMNS.forEach(
+        (table, expected) ->
+            assertThat(
+                    jdbc.queryForList(
+                        "SELECT attname FROM pg_attribute"
+                            + " WHERE attrelid = ?::regclass AND attnum > 0 AND NOT attisdropped"
+                            + " AND has_column_privilege(?::name, attrelid, attnum, 'UPDATE')",
+                        String.class,
+                        table,
+                        PostgresTestDatabase.APP_ROLE))
+                .as("updatable columns of %s", table)
+                .containsExactlyInAnyOrderElementsOf(expected));
+  }
 
   @Test
   void runtimeRolePrivilegesMatchTheIntendedSetForEveryTable() {

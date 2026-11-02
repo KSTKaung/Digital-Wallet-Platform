@@ -36,6 +36,6 @@ jobs:
       - name: Create CI-only .env from the template
         run: cp .env.example .env
       - name: Validate compose.yaml
-        run: docker compose --profile mail config --quiet
+        run: docker compose config --quiet
       - name: Build backend and frontend images
         run: docker compose build

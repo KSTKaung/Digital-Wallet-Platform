@@ -16,7 +16,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Migration smoke test, outside the {@code database} suite. Beyond {@code MigrationAndRoleIT} it
- * pins the exact applied script versions (V1 to V6, in order, current version 6) and that Flyway's
+ * pins the exact applied script versions (V1 to V7, in order, current version 7) and that Flyway's
  * history lives in the {@code flyway} schema (doc 08 Q6), so an added, removed or renumbered
  * migration fails here. Its runtime-role check duplicates {@code MigrationAndRoleIT}; unlike that
  * suite it runs in its own Spring context, not the shared {@code DatabaseIntegrationTest} one.
@@ -33,18 +33,18 @@ class DatabaseMigrationSmokeIT {
   @Autowired JdbcTemplate jdbc;
 
   @Test
-  void migrationsV1ToV6AreAppliedInTheFlywaySchema() {
+  void migrationsV1ToV7AreAppliedInTheFlywaySchema() {
     MigrationInfoService info = flyway.info();
 
     assertThat(info.pending()).isEmpty();
-    assertThat(info.current().getVersion().getVersion()).isEqualTo("6");
+    assertThat(info.current().getVersion().getVersion()).isEqualTo("7");
     assertThat(
             Arrays.stream(info.applied())
                 // Skips Flyway's own "create schema" marker row.
                 .filter(m -> m.getScript().endsWith(".sql"))
                 .map(MigrationInfo::getVersion)
                 .map(v -> v.getVersion()))
-        .containsExactly("1", "2", "3", "4", "5", "6");
+        .containsExactly("1", "2", "3", "4", "5", "6", "7");
     assertThat(Arrays.stream(info.applied()).allMatch(m -> m.getState().isApplied())).isTrue();
     assertThat(Arrays.stream(info.applied()).noneMatch(m -> m.getState().isFailed())).isTrue();
     assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("flyway");

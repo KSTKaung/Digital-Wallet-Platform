@@ -2,6 +2,8 @@ package com.portfolio.wallet.common.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.wallet.common.correlation.CorrelationId;
+import jakarta.servlet.DispatcherType;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -37,6 +39,23 @@ class CorrelationIdFilterTest {
     filter.doFilter(request, response, (req, res) -> {});
 
     assertThat(response.getHeader(CorrelationId.HEADER)).isEqualTo("client-123.abc_9");
+  }
+
+  /** The first pass has cleared the MDC by then, and the error body needs the same id. */
+  @Test
+  void errorDispatchReusesTheIdOfTheOriginalRequest() throws Exception {
+    var request = new MockHttpServletRequest();
+    var response = new MockHttpServletResponse();
+    filter.doFilter(request, response, (req, res) -> {});
+    String generated = response.getHeader(CorrelationId.HEADER);
+    var seenInMdc = new AtomicReference<String>();
+
+    request.setDispatcherType(DispatcherType.ERROR);
+    filter.doFilter(request, response, (req, res) -> seenInMdc.set(MDC.get(CorrelationId.MDC_KEY)));
+
+    assertThat(seenInMdc.get()).isEqualTo(generated);
+    assertThat(response.getHeader(CorrelationId.HEADER)).isEqualTo(generated);
+    assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
   }
 
   @Test

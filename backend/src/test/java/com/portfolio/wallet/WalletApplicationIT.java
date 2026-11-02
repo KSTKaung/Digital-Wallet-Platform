@@ -6,7 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.portfolio.wallet.common.web.CorrelationId;
+import com.portfolio.wallet.common.correlation.CorrelationId;
+import com.portfolio.wallet.common.security.RequiredSecrets;
 import com.portfolio.wallet.support.PostgresTestDatabase;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,15 @@ class WalletApplicationIT {
   }
 
   @Autowired MockMvc mvc;
+  @Autowired RequiredSecrets requiredSecrets;
+
+  /**
+   * The real context validates the secrets at startup; RequiredSecretsWiringTest covers failure.
+   */
+  @Test
+  void requiredSecretsAreLoadedByTheApplicationContext() {
+    assertThat(requiredSecrets.jwtKid()).isNotBlank();
+  }
 
   @Test
   void healthIsUpWithDatabaseAndExposesNoDetails() throws Exception {

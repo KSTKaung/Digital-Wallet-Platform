@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.portfolio.wallet.common.web.CorrelationId;
+import com.portfolio.wallet.common.correlation.CorrelationId;
+import com.portfolio.wallet.common.web.ApiErrorController;
+import com.portfolio.wallet.support.RejectingJwtDecoder;
 import java.net.URI;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,9 +24,9 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Security baseline with the real filter chain, no database (web slice). */
-@WebMvcTest
+@WebMvcTest(controllers = ApiErrorController.class)
 @ExtendWith(OutputCaptureExtension.class)
-@Import({SecurityConfig.class, JsonSecurityErrorHandler.class})
+@Import({SecurityConfig.class, JsonSecurityErrorHandler.class, RejectingJwtDecoder.class})
 class SecurityConfigWebTest {
 
   @Autowired MockMvc mvc;
@@ -98,7 +101,42 @@ class SecurityConfigWebTest {
                 .header("Origin", "https://evil.example")
                 .header("Access-Control-Request-Method", "POST"))
         .andExpect(status().isForbidden())
+        .andExpect(header().doesNotExist("Access-Control-Allow-Origin"))
+        .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+  }
+
+  /** The documented body, not Spring's plain-text "Invalid CORS request". */
+  @Test
+  void aForeignOriginGetsTheDocumentedBodyOnLoginAndOtherPaths() throws Exception {
+    mvc.perform(post("/api/v1/auth/login").header("Origin", "https://evil.example"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.success").value(false))
+        .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("Access denied"))
+        .andExpect(jsonPath("$.correlationId").value(notNullValue()))
+        .andExpect(jsonPath("$.timestamp").value(notNullValue()))
         .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    mvc.perform(get("/api/v1/wallet").header("Origin", "https://evil.example"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+  }
+
+  @Test
+  void aForeignOriginIsLoggedOnceWithoutItsValue(CapturedOutput output) throws Exception {
+    mvc.perform(get("/api/v1/wallet").header("Origin", "https://logged-marker.example"))
+        .andExpect(status().isForbidden());
+
+    assertThat(output.getAll())
+        .containsOnlyOnce("Refused a cross-origin request")
+        .doesNotContain("logged-marker");
+  }
+
+  @Test
+  void anAllowedOriginPassesAndCorsStaysNonCredentialed() throws Exception {
+    mvc.perform(get("/api/v1/wallet").header("Origin", "http://localhost:5173"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+        .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
   }
 
   /** Regression: the web slice once created Boot's default user and logged its password. */

@@ -14,8 +14,8 @@ Conventions for the Banking Digital Wallet Platform. Design rules live in `docum
 ```
 backend/          Spring Boot 4.1.2 modular application (com.portfolio.wallet.<module>)
 frontend/         React + TypeScript + Vite + Tailwind web app, nginx config for Compose
-compose.yaml      postgres, backend, frontend, optional mailpit
-scripts/          dev-up.sh, dev-down.sh (Bash)
+compose.yaml      postgres, backend, frontend, mailpit
+scripts/          dev-up.sh, dev-down.sh, generate-dev-secrets.sh (Bash)
 .github/          CI workflows, Dependabot, PR template
 documentations/   01–05 target architecture; 06 MVP decisions (governs the MVP)
 ```
@@ -69,12 +69,13 @@ documentations/   01–05 target architecture; 06 MVP decisions (governs the MVP
 
 ### Local stack (repository root)
 1. `cp .env.example .env` and set your own `POSTGRES_SUPERUSER_PASSWORD` (bootstrap superuser `wallet`, which runs the init script; the application never uses it), `WALLET_OWNER_PASSWORD` (Flyway, owns the schemas) and `WALLET_APP_PASSWORD` (runtime, DML only). The PostgreSQL init script creates both roles only when the volume is first created; if you have a volume from before PR 2, recreate it with `scripts/dev-down.sh --purge` (this deletes local data).
-2. `docker compose up -d --build --wait` (or `scripts/dev-up.sh`, add `--mail` for Mailpit).
-3. Frontend http://localhost:5173 (nginx proxies `/api` to the backend), backend http://localhost:8080, OpenAPI JSON http://localhost:8080/v3/api-docs (local profile; no bundled Swagger UI, see documentations/06 MVP-ADR-15), Mailpit http://localhost:8025.
-4. Stop with `scripts/dev-down.sh` (data kept) or `scripts/dev-down.sh --purge` (deletes the database volume after confirmation).
+2. Run `scripts/generate-dev-secrets.sh` and paste its output into `.env`, replacing the placeholders for `JWT_PRIVATE_KEY`, `JWT_KID`, `OTP_HMAC_SECRET` and `REFRESH_TOKEN_PEPPER`. The backend refuses to start without valid values.
+3. `docker compose up -d --build --wait` (or `scripts/dev-up.sh`). If a stack from before PR 3 exists, run `scripts/dev-down.sh` first, because Compose now uses a fixed network (`172.30.0.0/24`).
+4. Frontend http://localhost:5173 (nginx proxies `/api` to the backend), backend http://localhost:8080, OpenAPI JSON http://localhost:8080/v3/api-docs (local profile; no bundled Swagger UI, see documentations/06 MVP-ADR-15), Mailpit http://localhost:8025.
+5. Stop with `scripts/dev-down.sh` (data kept) or `scripts/dev-down.sh --purge` (deletes the database volume after confirmation).
 
 If a local PostgreSQL already listens on 5432, set `POSTGRES_HOST_PORT` (e.g. `55432`) in `.env`.
 
 ## Secrets and keys
 - Never commit secrets, keys or certificates. `.env`, `*.key`, `*.p12` and `*.jks` are gitignored, and Gitleaks runs in CI.
-- Copy `.env.example` to `.env` for local values. Dev keys and passwords are for local use only and are never used in staging or production (doc 03 §6.2).
+- Copy `.env.example` to `.env` for local values; `scripts/generate-dev-secrets.sh` prints the required secrets and writes no file. Dev keys and passwords are for local use only and are never used in staging or production (doc 03 §6.2).

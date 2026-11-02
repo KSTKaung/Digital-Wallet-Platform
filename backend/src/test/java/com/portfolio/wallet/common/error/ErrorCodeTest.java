@@ -28,6 +28,9 @@ class ErrorCodeTest {
           "OTP_ATTEMPTS_EXCEEDED",
           "ACCOUNT_LOCKED",
           "IDEMPOTENCY_KEY_REUSED",
+          "INVALID_TRANSFER_STATE",
+          "RATE_LIMITED",
+          "UNSUPPORTED_MEDIA_TYPE",
           "SERVICE_DEGRADED",
           "QR_EXPIRED",
           "MERCHANT_NOT_APPROVED",
@@ -59,5 +62,8 @@ class ErrorCodeTest {
     assertThat(ErrorCode.WALLET_NOT_FOUND.status().value()).isEqualTo(404);
     assertThat(ErrorCode.SERVICE_DEGRADED.status().value()).isEqualTo(503);
     assertThat(ErrorCode.SYSTEM_ERROR.status().value()).isEqualTo(500);
+    assertThat(ErrorCode.INVALID_TRANSFER_STATE.status().value()).isEqualTo(409);
+    assertThat(ErrorCode.RATE_LIMITED.status().value()).isEqualTo(429);
+    assertThat(ErrorCode.UNSUPPORTED_MEDIA_TYPE.status().value()).isEqualTo(415);
   }
 }

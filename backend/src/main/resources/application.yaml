@@ -39,9 +39,27 @@ spring:
       # Role that V1 grants schema usage and default table privileges to. Brackets keep the "_":
       # without them Spring Boot's relaxed binding drops it and the key becomes "approle".
       "[app_role]": ${DB_APP_ROLE:wallet_app}
+  # Outgoing mail (documentations/08 §4A.2 Q10). Mailpit under Compose; no credentials locally.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      # Bounds how long one send can hold its virtual thread, in milliseconds.
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
 
 server:
   port: ${SERVER_PORT:8080}
+  # Tomcat reads X-Forwarded-For only from a peer matching internal-proxies, a regular expression.
+  # Empty trusts nobody, so a header sent directly to the backend changes nothing. The header is
+  # what the rate limiter and audit rows see through getRemoteAddr().
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      internal-proxies: ${TRUSTED_PROXIES:}
   error:
     include-message: never
     include-stacktrace: never
@@ -57,6 +75,11 @@ management:
       show-details: never
       probes:
         enabled: true
+  health:
+    # An SMTP outage must not take the application out of service: a send failure never fails a
+    # request (documentations/06 MVP-ADR-23).
+    mail:
+      enabled: false
 
 # Structured JSON logs (MDC fields such as correlationId are included). Never log secrets or PII.
 logging:
@@ -67,6 +90,61 @@ logging:
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # The access token's iss claim; signing and validation read the same value.
+  jwt:
+    issuer: ${JWT_ISSUER:wallet}
+  mail:
+    from: ${MAIL_FROM:no-reply@wallet.local}
+  # In-memory, per instance (documentations/06 MVP-ADR-06; doc 02 §1.8).
+  rate-limit:
+    auth-requests-per-minute-per-ip: 10
+    other-requests-per-minute-per-user: 300
+    # Memory bound per limiter; not a documented value.
+    max-tracked-keys: 100000
+  # Authentication parameters (documentations/06 MVP-ADR-23). JWT_PRIVATE_KEY, JWT_KID,
+  # OTP_HMAC_SECRET and REFRESH_TOKEN_PEPPER are not here: they come only from the environment and
+  # have no default in any profile (common.security.RequiredSecrets).
+  auth:
+    lockout:
+      max-failed-attempts: 5
+      duration: 15m
+      unknown-identifier-retention: 24h
+    password:
+      min-length: 12
+      max-length: 128
+      history-depth: 5
+    argon2:
+      # OWASP baseline: 19 MiB, 2 iterations, parallelism 1.
+      memory-kib: 19456
+      iterations: 2
+      parallelism: 1
+      # Spring Security's Argon2PasswordEncoder defaults; not documented values.
+      salt-length-bytes: 16
+      hash-length-bytes: 32
+      # Owner-confirmed bound: at most 4 x 19 MiB of hashing memory at once.
+      max-concurrent-hashes: 4
+    otp:
+      digits: 6
+      ttl: 5m
+      max-attempts: 5
+      resend-cooldown: 60s
+      max-resends-per-hour: 5
+      used-up-cap: 5
+      used-up-window: 24h
+    token:
+      access-ttl: 15m
+      refresh-ttl: 7d
+      reset-ttl: 15m
+    session:
+      idle-timeout: 30m
+      last-seen-write-interval: 1m
+    # How often expired rows are deleted; not a documented value.
+    purge:
+      enabled: true
+      interval: 1h
+    # Owner decisions on the PR 3 review (documentations/06 MVP-ADR-23).
+    pending-account-ttl: 24h
+    owner-notice-interval: 1h
 
 # OpenAPI JSON (/v3/api-docs) is off by default and enabled only in the local profile.
 springdoc:

@@ -62,7 +62,22 @@ class SchemaObjectsIT extends DatabaseIntegrationTest {
         "transfer.ix_transfers_completed_sender_receiver"
             + " | (sender_customer_id, receiver_customer_id)"
             + " | WHERE ((status)::text = 'COMPLETED'::text)",
-        "wallet.ix_lookup_attempts_attempted | (attempted_at) | "
+        "wallet.ix_lookup_attempts_attempted | (attempted_at) | ",
+        "auth.ix_users_pending_created | (created_at)"
+            + " | WHERE ((status)::text = 'PENDING_VERIFICATION'::text)",
+        "auth.ix_password_history_user_created | (user_id, created_at) | ",
+        "auth.ix_login_failure_counters_updated | (updated_at) | ",
+        "auth.ix_sessions_user | (user_id) | ",
+        "auth.ix_refresh_tokens_session | (session_id) | ",
+        "auth.ix_refresh_tokens_expires | (expires_at) | ",
+        "auth.uq_otp_challenges_live | (identifier_hash, purpose)"
+            + " | WHERE ((consumed_at IS NULL) AND (cancelled_at IS NULL) AND (used_up_at IS NULL))",
+        "auth.ix_otp_challenges_identifier_sent | (identifier_hash, purpose, sent_at) | ",
+        "auth.ix_otp_challenges_identifier_used_up | (identifier_hash, used_up_at)"
+            + " | WHERE (used_up_at IS NOT NULL)",
+        "auth.ix_otp_challenges_sent | (sent_at) | ",
+        "auth.ix_password_reset_tokens_user | (user_id) | ",
+        "auth.ix_password_reset_tokens_expires | (expires_at) | "
       })
   void accessPathIndexExists(String index, String columns, String predicate) {
     String definition =

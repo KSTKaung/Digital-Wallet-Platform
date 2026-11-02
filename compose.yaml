@@ -1,8 +1,8 @@
 # Local development stack (documentations/06 MVP-ADR-17). Values come from .env (gitignored);
 # copy .env.example to .env first. All ports bind to 127.0.0.1 only.
 #
-#   docker compose up -d --build            postgres + backend + frontend
-#   docker compose --profile mail up -d     ... plus Mailpit (SMTP 1025, UI http://localhost:8025)
+#   docker compose up -d --build            postgres, backend, frontend and Mailpit
+#                                           (SMTP 1025, UI http://localhost:8025)
 name: digital-wallet
 
 services:
@@ -45,11 +45,29 @@ services:
       FLYWAY_USERNAME: wallet_owner
       FLYWAY_PASSWORD: ${WALLET_OWNER_PASSWORD:?Set WALLET_OWNER_PASSWORD in .env}
       APP_CORS_ALLOWED_ORIGINS: http://localhost:5173
+      # Required in every profile; scripts/generate-dev-secrets.sh prints values for .env
+      # (documentations/06 MVP-ADR-23).
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?Set JWT_PRIVATE_KEY in .env (scripts/generate-dev-secrets.sh)}
+      JWT_KID: ${JWT_KID:?Set JWT_KID in .env (scripts/generate-dev-secrets.sh)}
+      OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?Set OTP_HMAC_SECRET in .env (scripts/generate-dev-secrets.sh)}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?Set REFRESH_TOKEN_PEPPER in .env (scripts/generate-dev-secrets.sh)}
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      # Only nginx is believed about the client's address. A request to the published port comes
+      # from the network's gateway, so its X-Forwarded-For is ignored.
+      TRUSTED_PROXIES: '172\.30\.0\.250'
+      # Optional staff accounts, created at startup if set and absent (documentations/08 Q8).
+      STAFF_ADMIN_EMAIL: ${STAFF_ADMIN_EMAIL:-}
+      STAFF_ADMIN_PASSWORD: ${STAFF_ADMIN_PASSWORD:-}
+      STAFF_COMPLIANCE_EMAIL: ${STAFF_COMPLIANCE_EMAIL:-}
+      STAFF_COMPLIANCE_PASSWORD: ${STAFF_COMPLIANCE_PASSWORD:-}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       # No curl in the JRE image; bash's /dev/tcp is enough to query the health endpoint.
       test:
@@ -64,6 +82,10 @@ services:
 
   frontend:
     build: ./frontend
+    networks:
+      default:
+        # Fixed, because the backend's TRUSTED_PROXIES names this address.
+        ipv4_address: 172.30.0.250
     ports:
       - "127.0.0.1:5173:5173"
     depends_on:
@@ -78,10 +100,15 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.32.0
-    profiles: ["mail"]
     ports:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   pgdata:

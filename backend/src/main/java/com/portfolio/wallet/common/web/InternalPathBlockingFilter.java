@@ -1,5 +1,6 @@
 package com.portfolio.wallet.common.web;
 
+import com.portfolio.wallet.common.correlation.CorrelationId;
 import com.portfolio.wallet.common.error.ErrorCode;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

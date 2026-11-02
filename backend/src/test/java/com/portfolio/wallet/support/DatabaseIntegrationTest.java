@@ -381,6 +381,40 @@ public abstract class DatabaseIntegrationTest {
         "actor_user_id", actor);
   }
 
+  // Auth fixtures -----------------------------------------------------------------------------
+
+  protected static String randomDigits(int count) {
+    StringBuilder digits = new StringBuilder(count);
+    for (int i = 0; i < count; i++) {
+      digits.append(ThreadLocalRandom.current().nextInt(10));
+    }
+    return digits.toString();
+  }
+
+  /** 64 lower-case hex characters, the form of every HMAC-SHA256 column in the auth schema. */
+  protected static String randomHexDigest() {
+    return (UUID.randomUUID().toString() + UUID.randomUUID()).replace("-", "");
+  }
+
+  /** A valid customer with a fresh email and phone number. */
+  protected static Map<String, Object> validUser() {
+    return row(
+        "id",
+        UUID.randomUUID(),
+        "email",
+        "user-" + UUID.randomUUID() + "@example.test",
+        "phone_number",
+        "+" + randomDigits(15),
+        "role",
+        "CUSTOMER");
+  }
+
+  protected UUID newUser() throws SQLException {
+    Map<String, Object> user = validUser();
+    insert("auth.users", user);
+    return (UUID) user.get("id");
+  }
+
   // Concurrency -------------------------------------------------------------------------------
 
   /** Polls pg_stat_activity until backend {@code pid} waits on a lock, or fails after 20 s. */
