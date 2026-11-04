@@ -46,6 +46,9 @@ public final class PostgresTestDatabase {
 
   private static final int UNTRIPPABLE_LIMIT = 1_000_000;
 
+  /** Test database only; see {@link #createContainer()}. */
+  private static final int MAX_CONNECTIONS = 300;
+
   private static final PostgreSQLContainer CONTAINER = createContainer();
 
   private PostgresTestDatabase() {}
@@ -71,6 +74,8 @@ public final class PostgresTestDatabase {
     registry.add("spring.flyway.user", () -> OWNER_ROLE);
     registry.add("spring.flyway.password", () -> OWNER_PASSWORD);
     registry.add("spring.flyway.placeholders[app_role]", () -> APP_ROLE);
+    // Tests drive the outbox dispatcher themselves, so no background run races them.
+    registry.add("app.notification.outbox.enabled", () -> false);
     TestSecrets.values().forEach((name, value) -> registry.add(name, () -> value));
   }
 
@@ -93,6 +98,10 @@ public final class PostgresTestDatabase {
       throw new IllegalStateException("Role init script not found: " + script);
     }
     return new PostgreSQLContainer("postgres:18.6-alpine")
+        // Each cached Spring test context keeps its own connection pool open, so the suite needs
+        // more than PostgreSQL's default of 100 connections. fsync=off is Testcontainers' default
+        // command, kept because setting a command replaces it.
+        .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=" + MAX_CONNECTIONS)
         .withEnv("WALLET_OWNER_PASSWORD", OWNER_PASSWORD)
         .withEnv("WALLET_APP_PASSWORD", APP_PASSWORD)
         .withCopyFileToContainer(

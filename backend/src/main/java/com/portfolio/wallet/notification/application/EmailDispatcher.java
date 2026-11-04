@@ -21,6 +21,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * MVP-ADR-23). The executor is Spring Boot's {@code applicationTaskExecutor}, which uses virtual
  * threads because {@code spring.threads.virtual.enabled} is set.
  *
+ * <p>Only for the direct emails of the auth module (OTP, registration notice, account lock), which
+ * stay direct under MVP-ADR-25: a code is time-limited and a user who does not get one asks again.
+ * Business emails (KYC decisions, wallet freeze and unfreeze) go through {@link NotificationOutbox}
+ * instead, which has a stable event id and retries.
+ *
  * <p>A failed send is logged and audited as {@code EMAIL_SEND_FAILED} with the {@link EmailKind}
  * and the exception's class only. The exception's message and stack trace are left out, because
  * mail exceptions quote recipient addresses.

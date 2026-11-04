@@ -23,6 +23,7 @@ class ErrorCodeTest {
           "CURRENCY_MISMATCH",
           "KYC_REQUIRED",
           "KYC_ALREADY_ACTIVE",
+          "INVALID_KYC_STATE",
           "INVALID_OTP",
           "OTP_EXPIRED",
           "OTP_ATTEMPTS_EXCEEDED",
@@ -65,5 +66,6 @@ class ErrorCodeTest {
     assertThat(ErrorCode.INVALID_TRANSFER_STATE.status().value()).isEqualTo(409);
     assertThat(ErrorCode.RATE_LIMITED.status().value()).isEqualTo(429);
     assertThat(ErrorCode.UNSUPPORTED_MEDIA_TYPE.status().value()).isEqualTo(415);
+    assertThat(ErrorCode.INVALID_KYC_STATE.status().value()).isEqualTo(409);
   }
 }

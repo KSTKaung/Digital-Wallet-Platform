@@ -35,6 +35,37 @@ class ArchitectureRulesSelfTest {
   }
 
   @Test
+  void detectsAModuleOtherThanAdminDependingOnUser() {
+    var result = ArchitectureRules.onlyAdminDependsOnUser(FIXTURE_ROOT).evaluate(FIXTURES);
+
+    assertThat(result.hasViolation()).isTrue();
+    assertThat(result.getFailureReport().toString())
+        .contains("ProfileReader", "CustomerFacade")
+        .doesNotContain("KycDecisions");
+  }
+
+  @Test
+  void detectsTheMoneyCoreDependingUpward() {
+    var result = ArchitectureRules.moneyCoreDependsDownwardOnly(FIXTURE_ROOT).evaluate(FIXTURES);
+
+    assertThat(result.hasViolation()).isTrue();
+    assertThat(result.getFailureReport().toString())
+        .contains("WalletOwnerReader", "LedgerWalletReader")
+        // wallet -> ledger is the intended direction.
+        .doesNotContain("LedgerAccounts");
+  }
+
+  @Test
+  void detectsAnApplicationApiExposingPersistence() {
+    var result = ArchitectureRules.applicationApisHidePersistence().evaluate(FIXTURES);
+
+    assertThat(result.hasViolation()).isTrue();
+    assertThat(result.getFailureReport().toString())
+        .contains("WalletLeak.repository()", "WalletLeak.save(")
+        .doesNotContain("WalletLeak.internal()");
+  }
+
+  @Test
   void detectsCommonDependingOnModule() {
     var result = ArchitectureRules.commonDependsOnNoModule(FIXTURE_ROOT).evaluate(FIXTURES);
 

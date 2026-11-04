@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.GeneralCodingRules.ACCESS_STANDARD_STREAMS;
 import static com.tngtech.archunit.library.GeneralCodingRules.NO_CLASSES_SHOULD_USE_FIELD_INJECTION;
 import static com.tngtech.archunit.library.GeneralCodingRules.NO_CLASSES_SHOULD_USE_JAVA_UTIL_LOGGING;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -38,6 +39,44 @@ class ArchitectureTest {
   @Test
   void moduleInternalsArePrivate() {
     ArchitectureRules.moduleInternalsArePrivate(ROOT).check(CLASSES);
+  }
+
+  @Test
+  void onlyAdminDependsOnUser() {
+    ArchitectureRules.onlyAdminDependsOnUser(ROOT).check(CLASSES);
+  }
+
+  @Test
+  void moneyCoreDependsDownwardOnly() {
+    ArchitectureRules.moneyCoreDependsDownwardOnly(ROOT).check(CLASSES);
+  }
+
+  @Test
+  void applicationApisHidePersistence() {
+    ArchitectureRules.applicationApisHidePersistence().check(CLASSES);
+  }
+
+  /** The direction is real, not vacuous: wallet uses ledger, and user uses wallet (PR 4a). */
+  @Test
+  void walletCreationGoesThroughTheApplicationApis() {
+    assertThat(
+            CLASSES
+                .get("com.portfolio.wallet.wallet.application.WalletService")
+                .getDirectDependenciesFromSelf())
+        .anyMatch(
+            d ->
+                d.getTargetClass()
+                    .getName()
+                    .equals("com.portfolio.wallet.ledger.application.LedgerAccountService"));
+    assertThat(
+            CLASSES
+                .get("com.portfolio.wallet.user.application.WalletModuleCustomerWallets")
+                .getDirectDependenciesFromSelf())
+        .anyMatch(
+            d ->
+                d.getTargetClass()
+                    .getName()
+                    .equals("com.portfolio.wallet.wallet.application.WalletService"));
   }
 
   @Test

@@ -4,5 +4,9 @@ package com.portfolio.wallet.notification.application;
 public enum EmailKind {
   OTP,
   ACCOUNT_LOCKED,
-  EXISTING_ACCOUNT_NOTICE
+  EXISTING_ACCOUNT_NOTICE,
+  KYC_APPROVED,
+  KYC_REJECTED,
+  WALLET_FROZEN,
+  WALLET_UNFROZEN
 }

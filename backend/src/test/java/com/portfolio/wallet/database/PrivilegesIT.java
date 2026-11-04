@@ -64,7 +64,7 @@ class PrivilegesIT extends DatabaseIntegrationTest {
           entry("wallet.lookup_attempts", APPEND_AND_PURGE),
           // Per-sender lock rows: never deleted (owner, 2026-10-30).
           entry("risk.sender_risk_state", NO_DELETE),
-          // UPDATE only on the columns in AUTH_UPDATABLE_COLUMNS, so has_table_privilege is false.
+          // UPDATE only on the columns in COLUMN_UPDATE_GRANTS, so has_table_privilege is false.
           entry("auth.users", APPEND_AND_PURGE),
           entry("auth.owner_notices", APPEND_ONLY),
           entry("auth.credentials", APPEND_ONLY),
@@ -73,24 +73,53 @@ class PrivilegesIT extends DatabaseIntegrationTest {
           entry("auth.sessions", APPEND_AND_PURGE),
           entry("auth.refresh_tokens", APPEND_AND_PURGE),
           entry("auth.otp_challenges", APPEND_AND_PURGE),
-          entry("auth.password_reset_tokens", APPEND_AND_PURGE));
+          entry("auth.password_reset_tokens", APPEND_AND_PURGE),
+          // Never deleted; INSERT only on user_id (J4) and UPDATE only by column, so neither shows
+          // at table level (V8).
+          entry("usr.customers", Set.of("SELECT")),
+          entry("usr.kyc_applications", APPEND_ONLY),
+          // The email outbox: never deleted; UPDATE only by column (V9, MVP-ADR-25).
+          entry("notification.notifications", APPEND_ONLY));
 
-  private static final Map<String, Set<String>> AUTH_UPDATABLE_COLUMNS =
-      Map.of(
-          "auth.users", Set.of("phone_number", "status"),
-          "auth.credentials",
-              Set.of("password_hash", "failed_login_count", "locked_until", "password_changed_at"),
-          "auth.password_history", Set.of(),
-          "auth.owner_notices", Set.of("last_sent_at"),
-          "auth.login_failure_counters", Set.of("failed_count", "locked_until"),
-          "auth.sessions", Set.of("last_seen_at", "revoked_at", "revoked_reason"),
-          "auth.refresh_tokens", Set.of("used_at", "revoked_at"),
-          "auth.otp_challenges", Set.of("attempts", "consumed_at", "cancelled_at", "used_up_at"),
-          "auth.password_reset_tokens", Set.of("used_at"));
+  private static final Map<String, Set<String>> COLUMN_UPDATE_GRANTS =
+      Map.ofEntries(
+          entry("auth.users", Set.of("phone_number", "status")),
+          entry(
+              "auth.credentials",
+              Set.of("password_hash", "failed_login_count", "locked_until", "password_changed_at")),
+          entry("auth.password_history", Set.of()),
+          entry("auth.owner_notices", Set.of("last_sent_at")),
+          entry("auth.login_failure_counters", Set.of("failed_count", "locked_until")),
+          entry("auth.sessions", Set.of("last_seen_at", "revoked_at", "revoked_reason")),
+          entry("auth.refresh_tokens", Set.of("used_at", "revoked_at")),
+          entry(
+              "auth.otp_challenges",
+              Set.of("attempts", "consumed_at", "cancelled_at", "used_up_at")),
+          entry("auth.password_reset_tokens", Set.of("used_at")),
+          // Profile update and the approval's copy of the legal name (V8).
+          entry(
+              "usr.customers", Set.of("first_name", "last_name", "date_of_birth", "country_code")),
+          // Draft edit, submit and decision; the times and the profile snapshot are set by V8's
+          // trigger.
+          entry(
+              "usr.kyc_applications",
+              Set.of(
+                  "verification_level",
+                  "document_type",
+                  "document_reference",
+                  "first_name",
+                  "last_name",
+                  "status",
+                  "reviewer_id",
+                  "rejection_reason")),
+          // The dispatcher's outcome of an attempt (V9); what was reported never changes.
+          entry(
+              "notification.notifications",
+              Set.of("status", "attempts", "next_attempt_at", "last_failure")));
 
   @Test
-  void authTablesAllowUpdateOfTheIntendedColumnsOnly() {
-    AUTH_UPDATABLE_COLUMNS.forEach(
+  void columnGrantedTablesAllowUpdateOfTheIntendedColumnsOnly() {
+    COLUMN_UPDATE_GRANTS.forEach(
         (table, expected) ->
             assertThat(
                     jdbc.queryForList(
@@ -102,6 +131,20 @@ class PrivilegesIT extends DatabaseIntegrationTest {
                         PostgresTestDatabase.APP_ROLE))
                 .as("updatable columns of %s", table)
                 .containsExactlyInAnyOrderElementsOf(expected));
+  }
+
+  /** J4: a profile row is inserted with its user id only; the rest goes through the guard. */
+  @Test
+  void customersAllowInsertOfTheUserIdOnly() {
+    assertThat(
+            jdbc.queryForList(
+                "SELECT attname FROM pg_attribute"
+                    + " WHERE attrelid = 'usr.customers'::regclass AND attnum > 0"
+                    + " AND NOT attisdropped"
+                    + " AND has_column_privilege(?::name, attrelid, attnum, 'INSERT')",
+                String.class,
+                PostgresTestDatabase.APP_ROLE))
+        .containsExactly("user_id");
   }
 
   @Test

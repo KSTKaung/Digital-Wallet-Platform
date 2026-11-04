@@ -65,9 +65,9 @@ class SessionLockOrderIT extends AuthFlowSupport {
       lockToken(holder, tokens.refreshToken());
 
       Future<Integer> logout = pool.submit(() -> logout(tokens.accessToken()));
-      awaitLockWaiters(1);
+      awaitLockWaiters(holder, 1);
       Future<Integer> rotate = pool.submit(() -> refresh(tokens.refreshToken()).getStatus());
-      awaitLockWaiters(2);
+      awaitLockWaiters(holder, 2);
       holder.rollback();
 
       assertThat(logout.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isEqualTo(204);
@@ -86,9 +86,9 @@ class SessionLockOrderIT extends AuthFlowSupport {
 
       // Reuse of the old token revokes the session, then stops at the newer token.
       Future<Integer> reuse = pool.submit(() -> refresh(first.refreshToken()).getStatus());
-      awaitLockWaiters(1);
+      awaitLockWaiters(holder, 1);
       Future<Integer> rotate = pool.submit(() -> refresh(second.refreshToken()).getStatus());
-      awaitLockWaiters(2);
+      awaitLockWaiters(holder, 2);
       holder.rollback();
 
       assertThat(reuse.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isEqualTo(401);
@@ -110,9 +110,9 @@ class SessionLockOrderIT extends AuthFlowSupport {
           sessionIdOf(tokens.accessToken()));
 
       Future<Integer> rotate = pool.submit(() -> refresh(tokens.refreshToken()).getStatus());
-      awaitLockWaiters(1);
+      awaitLockWaiters(holder, 1);
       Future<Integer> logout = pool.submit(() -> logout(tokens.accessToken()));
-      awaitLockWaiters(2);
+      awaitLockWaiters(holder, 2);
       holder.rollback();
 
       // Whichever gets the session first, each answers cleanly and logout has the last word.
@@ -132,7 +132,7 @@ class SessionLockOrderIT extends AuthFlowSupport {
       update(holder, "DELETE FROM auth.sessions WHERE id = ?::uuid", sessionId);
 
       Future<Integer> rotate = pool.submit(() -> refresh(tokens.refreshToken()).getStatus());
-      awaitLockWaiters(1);
+      awaitLockWaiters(holder, 1);
       holder.commit();
 
       assertThat(rotate.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isEqualTo(401);

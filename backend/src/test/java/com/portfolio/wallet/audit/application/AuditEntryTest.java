@@ -71,7 +71,15 @@ class AuditEntryTest {
         "secret",
         "pepper",
         "privateKey",
-        "kycDocument"
+        "kycDocument",
+        "documentReference",
+        "document_reference",
+        "firstName",
+        "last_name",
+        "legalName",
+        "fullName",
+        "dateOfBirth",
+        "birthDate"
       })
   void sensitiveKeyIsRejected(String key) {
     assertThatThrownBy(() -> entry().withNewValue(Map.of(key, "x")))

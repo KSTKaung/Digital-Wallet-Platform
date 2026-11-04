@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
  * <p>{@link #VALIDATION_ERROR}, {@link #UNAUTHORIZED}, {@link #FORBIDDEN}, {@link #NOT_FOUND} and
  * {@link #METHOD_NOT_ALLOWED} are MVP additions for generic framework errors that doc 02 maps to a
  * status but does not name (documentations/06 MVP-ADR-19, which also adds {@link #RATE_LIMITED},
- * {@link #UNSUPPORTED_MEDIA_TYPE} and {@link #INVALID_TRANSFER_STATE}).
+ * {@link #UNSUPPORTED_MEDIA_TYPE}, {@link #INVALID_TRANSFER_STATE} and {@link #INVALID_KYC_STATE}).
  */
 public enum ErrorCode {
   // Generic (MVP additions)
@@ -38,6 +38,7 @@ public enum ErrorCode {
   // KYC
   KYC_REQUIRED(HttpStatus.FORBIDDEN),
   KYC_ALREADY_ACTIVE(HttpStatus.CONFLICT),
+  INVALID_KYC_STATE(HttpStatus.CONFLICT),
 
   // Authentication
   INVALID_OTP(HttpStatus.BAD_REQUEST),

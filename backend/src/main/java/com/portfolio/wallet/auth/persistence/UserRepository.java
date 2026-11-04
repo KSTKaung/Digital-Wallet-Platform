@@ -5,6 +5,8 @@ import com.portfolio.wallet.auth.domain.UserStatus;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
+import javax.sql.DataSource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -16,9 +18,11 @@ import org.springframework.stereotype.Repository;
 public class UserRepository {
 
   private final JdbcClient jdbc;
+  private final DataSource dataSource;
 
-  public UserRepository(JdbcClient jdbc) {
+  public UserRepository(JdbcClient jdbc, DataSource dataSource) {
     this.jdbc = jdbc;
+    this.dataSource = dataSource;
   }
 
   /**
@@ -154,6 +158,33 @@ public class UserRepository {
             .param("checked", checkedHash)
             .update()
         == 1;
+  }
+
+  /** Email and phone of one account, for the profile view of another module (PR 4a). */
+  public Optional<ContactRow> findContacts(UUID id) {
+    return jdbc.sql("SELECT email, phone_number FROM auth.users WHERE id = :id")
+        .param("id", id)
+        .query((rs, row) -> new ContactRow(rs.getString("email"), rs.getString("phone_number")))
+        .optional();
+  }
+
+  /**
+   * As {@link #findContacts(UUID)}, with a per-statement query timeout (S1): the JDBC driver
+   * cancels the statement after {@code timeout}, rounded up to whole seconds, and the call throws a
+   * {@code DataAccessException}. A statement timeout, not {@code SET LOCAL statement_timeout},
+   * because the email outbox calls this with no transaction open. Inside a transaction with its own
+   * timeout, the shorter of the two applies.
+   */
+  public Optional<ContactRow> findContacts(UUID id, Duration timeout) {
+    JdbcTemplate template = new JdbcTemplate(dataSource);
+    template.setQueryTimeout((int) Math.max(1, (timeout.toMillis() + 999) / 1000));
+    return template
+        .query(
+            "SELECT email, phone_number FROM auth.users WHERE id = ?",
+            (rs, row) -> new ContactRow(rs.getString("email"), rs.getString("phone_number")),
+            id)
+        .stream()
+        .findFirst();
   }
 
   // The condition is one of this class's constants, never client input.
