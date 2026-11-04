@@ -2,6 +2,8 @@ package com.portfolio.wallet.common.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,24 +11,39 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.portfolio.securityfixture.UrlRuleProbeController;
 import com.portfolio.wallet.common.correlation.CorrelationId;
 import com.portfolio.wallet.common.web.ApiErrorController;
 import com.portfolio.wallet.support.RejectingJwtDecoder;
 import java.net.URI;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultMatcher;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** Security baseline with the real filter chain, no database (web slice). */
+/**
+ * Security baseline with the real filter chain, no database (web slice). {@link
+ * UrlRuleProbeController} supplies endpoints without method security in each role group.
+ */
 @WebMvcTest(controllers = ApiErrorController.class)
 @ExtendWith(OutputCaptureExtension.class)
-@Import({SecurityConfig.class, JsonSecurityErrorHandler.class, RejectingJwtDecoder.class})
+@Import({
+  SecurityConfig.class,
+  JsonSecurityErrorHandler.class,
+  RejectingJwtDecoder.class,
+  UrlRuleProbeController.class
+})
 class SecurityConfigWebTest {
 
   @Autowired MockMvc mvc;
@@ -53,14 +70,161 @@ class SecurityConfigWebTest {
     }
   }
 
+  // /api/v1/wallets/** is a CUSTOMER path in the role table, so the caller is a customer.
   @Test
-  @WithMockUser
+  @WithMockUser(roles = "CUSTOMER")
   void authenticatedUnknownResourceIs404NotFoundWithGenericMessage() throws Exception {
     mvc.perform(get("/api/v1/wallets/00000000-0000-0000-0000-000000000001"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"))
         .andExpect(jsonPath("$.message").value("Resource not found"));
+  }
+
+  /** Outside every role group, an unknown path stays the generic 404 for any signed-in role. */
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void unknownPathOutsideTheRoleGroupsIsStill404() throws Exception {
+    mvc.perform(get("/api/v1/no-such-thing"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"));
+  }
+
+  /**
+   * A staff path with an endpoint but no rule of its own is refused for every role; one without an
+   * endpoint is the generic 404 for every role (J3; MVP-ADR-19), never a 403 that would reveal it.
+   */
+  @Test
+  @WithMockUser(roles = {"ADMIN", "COMPLIANCE_OFFICER", "CUSTOMER"})
+  void anUnruledStaffEndpointIsDeniedAndAnUnknownStaffPathIs404ForEveryRole() throws Exception {
+    mvc.perform(get(UrlRuleProbeController.ADMIN_OTHER))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    mvc.perform(get("/api/v1/admin/no-such-thing")).andExpect(genericNotFound());
+  }
+
+  // J3: role rules apply to endpoints only; /api/v1 without a rule needs CUSTOMER -----------------
+
+  private static ResultMatcher genericNotFound() {
+    List<ResultMatcher> matchers =
+        List.of(
+            status().isNotFound(),
+            jsonPath("$.success").value(false),
+            jsonPath("$.errorCode").value("NOT_FOUND"),
+            jsonPath("$.message").value("Resource not found"));
+    return result -> {
+      for (ResultMatcher matcher : matchers) {
+        matcher.match(result);
+      }
+    };
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"ADMIN", "COMPLIANCE_OFFICER"})
+  void staffOnUnknownPathsGetTheGeneric404(String role) throws Exception {
+    for (String path :
+        new String[] {
+          "/api/v1/wallet/xyz", "/api/v1/admin/xyz", "/api/v1/xyz", "/api/v1/kyc/xyz/abc"
+        }) {
+      mvc.perform(get(path).with(user("staff").roles(role))).andExpect(genericNotFound());
+      mvc.perform(post(path).with(user("staff").roles(role))).andExpect(genericNotFound());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"ADMIN", "COMPLIANCE_OFFICER"})
+  void staffOnAKnownCustomerEndpointAre403(String role) throws Exception {
+    for (String path :
+        new String[] {
+          UrlRuleProbeController.CUSTOMER_WALLET,
+          UrlRuleProbeController.CUSTOMER_KYC,
+          UrlRuleProbeController.OTHER_API
+        }) {
+      mvc.perform(get(path).with(user("staff").roles(role)))
+          .andExpect(status().isForbidden())
+          .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+  }
+
+  @Test
+  void aCustomerOnAKnownStaffEndpointIs403AndOnAnUnknownPath404() throws Exception {
+    for (String path :
+        new String[] {
+          UrlRuleProbeController.ADMIN_KYC,
+          UrlRuleProbeController.ADMIN_CUSTOMERS,
+          UrlRuleProbeController.ADMIN_OTHER
+        }) {
+      mvc.perform(get(path).with(user("customer").roles("CUSTOMER")))
+          .andExpect(status().isForbidden())
+          .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+    for (String path : new String[] {"/api/v1/admin/kyc/xyz", "/api/v1/xyz", "/api/v1/wallet/x"}) {
+      mvc.perform(get(path).with(user("customer").roles("CUSTOMER"))).andExpect(genericNotFound());
+    }
+  }
+
+  @Test
+  void theRightRoleReachesEachEndpoint() throws Exception {
+    mvc.perform(get(UrlRuleProbeController.OTHER_API).with(user("c").roles("CUSTOMER")))
+        .andExpect(status().isOk());
+    mvc.perform(get(UrlRuleProbeController.ADMIN_KYC).with(user("o").roles("COMPLIANCE_OFFICER")))
+        .andExpect(status().isOk());
+    mvc.perform(get(UrlRuleProbeController.ADMIN_CUSTOMERS).with(user("a").roles("ADMIN")))
+        .andExpect(status().isOk());
+  }
+
+  /** A wrong method on a known path is still an endpoint: the wrong role gets 403, not 405. */
+  @Test
+  void aWrongMethodOnAKnownPathIs403ForTheWrongRoleAnd405ForTheRightOne() throws Exception {
+    mvc.perform(delete(UrlRuleProbeController.CUSTOMER_WALLET).with(user("a").roles("ADMIN")))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    mvc.perform(post(UrlRuleProbeController.ADMIN_KYC).with(user("c").roles("CUSTOMER")))
+        .andExpect(status().isForbidden());
+    mvc.perform(post(UrlRuleProbeController.ADMIN_OTHER).with(user("a").roles("ADMIN")))
+        .andExpect(status().isForbidden());
+    mvc.perform(delete(UrlRuleProbeController.CUSTOMER_WALLET).with(user("c").roles("CUSTOMER")))
+        .andExpect(status().isMethodNotAllowed());
+  }
+
+  /** Without a token, known and unknown paths get the identical 401. */
+  @Test
+  void anonymousCallersGetTheIdentical401OnKnownAndUnknownPaths() throws Exception {
+    String reference = null;
+    for (String path :
+        new String[] {
+          UrlRuleProbeController.CUSTOMER_WALLET,
+          UrlRuleProbeController.ADMIN_KYC,
+          UrlRuleProbeController.ADMIN_OTHER,
+          UrlRuleProbeController.OTHER_API,
+          "/api/v1/wallet/xyz",
+          "/api/v1/admin/xyz",
+          "/api/v1/xyz"
+        }) {
+      for (MockHttpServletRequestBuilder request : List.of(get(path), delete(path))) {
+        MockHttpServletResponse response =
+            mvc.perform(request).andExpect(status().isUnauthorized()).andReturn().getResponse();
+        String body = stable(response);
+        if (reference == null) {
+          reference = body;
+        }
+        assertThat(body).as("%s %s", request, path).isEqualTo(reference);
+        assertThat(response.getHeader("WWW-Authenticate")).isNull();
+      }
+    }
+  }
+
+  private static String stable(MockHttpServletResponse response) throws Exception {
+    return response
+        .getContentAsString()
+        .replaceAll("\"timestamp\":\"[^\"]*\"", "")
+        .replaceAll("\"correlationId\":\"[^\"]*\"", "");
+  }
+
+  /** Paths outside /api/v1 keep the plain "signed in" rule. */
+  @Test
+  void outsideApiV1AnUnknownPathIsStill404ForAnyRole() throws Exception {
+    mvc.perform(get("/no-such-thing").with(user("a").roles("ADMIN"))).andExpect(genericNotFound());
   }
 
   @Test

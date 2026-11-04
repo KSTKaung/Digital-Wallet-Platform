@@ -77,7 +77,17 @@ class SchemaObjectsIT extends DatabaseIntegrationTest {
             + " | WHERE (used_up_at IS NOT NULL)",
         "auth.ix_otp_challenges_sent | (sent_at) | ",
         "auth.ix_password_reset_tokens_user | (user_id) | ",
-        "auth.ix_password_reset_tokens_expires | (expires_at) | "
+        "auth.ix_password_reset_tokens_expires | (expires_at) | ",
+        // The predicate is checked in UserConstraintsIT, by behaviour: its rendering is verbose.
+        "usr.uq_kyc_applications_active | UNIQUE INDEX uq_kyc_applications_active"
+            + " | 'PENDING_REVIEW'",
+        // K3, P2, N5: the review queue filter and oldest-first sort, drafts left out.
+        "usr.ix_kyc_applications_status_submitted | (status, submitted_at, id)"
+            + " | WHERE ((status)::text <> 'DRAFT'::text)",
+        "usr.ix_kyc_applications_customer_created | (customer_id, created_at) | ",
+        // MVP-ADR-25: the dispatcher claims due PENDING rows.
+        "notification.ix_notifications_pending_due | (next_attempt_at, event_id)"
+            + " | WHERE ((status)::text = 'PENDING'::text)"
       })
   void accessPathIndexExists(String index, String columns, String predicate) {
     String definition =

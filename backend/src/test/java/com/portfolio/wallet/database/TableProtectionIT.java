@@ -59,7 +59,13 @@ class TableProtectionIT extends DatabaseIntegrationTest {
         new ProtectedTable("risk.investigations", "id", "outcome"),
         // Per-sender lock rows: never deleted (owner, 2026-10-30; PrivilegesIT NO_DELETE).
         new ProtectedTable("risk.sender_risk_state", "customer_id", "updated_at"),
-        new ProtectedTable("auth.credentials", "user_id", "failed_login_count"));
+        new ProtectedTable("auth.credentials", "user_id", "failed_login_count"),
+        // Profile and KYC history are never deleted (V8).
+        new ProtectedTable("usr.customers", "user_id", "country_code"),
+        // A DRAFT, whose content the update guard lets change.
+        new ProtectedTable("usr.kyc_applications", "id", "first_name"),
+        // The email outbox: SENT and FAILED rows are kept (V9, MVP-ADR-25).
+        new ProtectedTable("notification.notifications", "event_id", "attempts"));
   }
 
   // Append-only tables, as wallet_app ---------------------------------------------------------
@@ -365,6 +371,15 @@ class TableProtectionIT extends DatabaseIntegrationTest {
                 "password_changed_at",
                 OffsetDateTime.now()));
         yield user;
+      }
+      case "usr.customers" -> newCustomer();
+      case "usr.kyc_applications" -> newKycApplication(newCustomer());
+      case "notification.notifications" -> {
+        UUID eventId = UUID.randomUUID();
+        insert(
+            "notification.notifications",
+            row("event_id", eventId, "user_id", UUID.randomUUID(), "kind", "WALLET_FROZEN"));
+        yield eventId;
       }
       default -> throw new IllegalArgumentException("no fixture for " + table.name());
     };

@@ -78,6 +78,38 @@ public final class LedgerAccount {
     return new LedgerAccount(id, code, type, ownerReference, currency, status);
   }
 
+  /**
+   * {@code ACTIVE} → {@code FROZEN}: the account refuses new entries (doc 01 §6.5 invariant 6).
+   *
+   * @return the account in its new status
+   * @throws InvalidLedgerAccountStatusTransitionException unless the account is {@code ACTIVE}
+   */
+  public LedgerAccount freeze() {
+    if (status != LedgerAccountStatus.ACTIVE) {
+      throw new InvalidLedgerAccountStatusTransitionException(
+          "only an active ledger account can be frozen");
+    }
+    return withStatus(LedgerAccountStatus.FROZEN);
+  }
+
+  /**
+   * {@code FROZEN} → {@code ACTIVE}.
+   *
+   * @return the account in its new status
+   * @throws InvalidLedgerAccountStatusTransitionException unless the account is {@code FROZEN}
+   */
+  public LedgerAccount unfreeze() {
+    if (status != LedgerAccountStatus.FROZEN) {
+      throw new InvalidLedgerAccountStatusTransitionException(
+          "only a frozen ledger account can be unfrozen");
+    }
+    return withStatus(LedgerAccountStatus.ACTIVE);
+  }
+
+  private LedgerAccount withStatus(LedgerAccountStatus newStatus) {
+    return new LedgerAccount(id, code, type, ownerReference, currency, newStatus);
+  }
+
   public boolean acceptsPostings() {
     return status == LedgerAccountStatus.ACTIVE;
   }

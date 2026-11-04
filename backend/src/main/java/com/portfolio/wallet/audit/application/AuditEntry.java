@@ -34,10 +34,28 @@ public record AuditEntry(
   private static final int MAX_ACTION_OR_RESOURCE = 60;
   private static final int MAX_RESOURCE_ID = 64;
 
-  /** Matched against keys lower-cased, with everything but letters removed. */
+  /**
+   * Matched against keys lower-cased, with everything but letters removed. The last group is KYC
+   * and profile content (doc 03 §5.1; documentations/08 §4B.4 AC 11).
+   */
   private static final List<String> FORBIDDEN_KEY_PARTS =
       List.of(
-          "password", "passwd", "hash", "token", "otp", "secret", "pepper", "privatekey", "kyc");
+          "password",
+          "passwd",
+          "hash",
+          "token",
+          "otp",
+          "secret",
+          "pepper",
+          "privatekey",
+          "kyc",
+          "documentref",
+          "firstname",
+          "lastname",
+          "legalname",
+          "fullname",
+          "dateofbirth",
+          "birthdate");
 
   public AuditEntry {
     Objects.requireNonNull(actorType, "actorType");

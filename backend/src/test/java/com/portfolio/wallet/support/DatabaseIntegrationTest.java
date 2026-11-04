@@ -415,7 +415,139 @@ public abstract class DatabaseIntegrationTest {
     return (UUID) user.get("id");
   }
 
+  // User fixtures -----------------------------------------------------------------------------
+
+  /**
+   * Inserts a profile row with a date of birth and a country, which a submit requires (V8, J5), and
+   * no legal name yet; returns its user id.
+   */
+  protected UUID newCustomer() throws SQLException {
+    UUID id = newCustomerWithoutProfile();
+    jdbc.update(
+        "UPDATE usr.customers SET date_of_birth = '1990-05-17', country_code = 'TH'"
+            + " WHERE user_id = ?",
+        id);
+    return id;
+  }
+
+  /** Inserts a profile row with its user id only, as the application does (V8 grants no more). */
+  protected UUID newCustomerWithoutProfile() throws SQLException {
+    UUID id = UUID.randomUUID();
+    insert("usr.customers", row("user_id", id));
+    return id;
+  }
+
+  /** A valid DRAFT application for {@code customerId} (created as DRAFT only, V8). */
+  protected static Map<String, Object> validKycApplication(UUID customerId) {
+    return row(
+        "id", UUID.randomUUID(),
+        "customer_id", customerId,
+        "verification_level", "BASIC",
+        "document_type", "ID_CARD",
+        "document_reference", "AB1234567",
+        "first_name", "Somchai",
+        "last_name", "Jaidee");
+  }
+
+  protected UUID newKycApplication(UUID customerId) throws SQLException {
+    Map<String, Object> application = validKycApplication(customerId);
+    insert("usr.kyc_applications", application);
+    return (UUID) application.get("id");
+  }
+
+  /**
+   * Moves an application through the allowed transitions to {@code status}, as {@code wallet_app}:
+   * PENDING_REVIEW by submitting (skipped if it is already submitted), then APPROVED or REJECTED by
+   * a random reviewer.
+   */
+  protected void moveKycApplication(UUID id, String status) {
+    if ("DRAFT".equals(status)) {
+      return;
+    }
+    // A submit needs the profile's date of birth and country (V8, J5); fill them if missing.
+    jdbc.update(
+        "UPDATE usr.customers SET date_of_birth = coalesce(date_of_birth, '1990-05-17'),"
+            + " country_code = coalesce(country_code, 'TH')"
+            + " WHERE user_id = (SELECT customer_id FROM usr.kyc_applications WHERE id = ?)"
+            + " AND (date_of_birth IS NULL OR country_code IS NULL)",
+        id);
+    jdbc.update(
+        "UPDATE usr.kyc_applications SET status = 'PENDING_REVIEW' WHERE id = ? AND status = 'DRAFT'",
+        id);
+    if ("APPROVED".equals(status)) {
+      approveWithLegalName(id);
+    } else if ("REJECTED".equals(status)) {
+      jdbc.update(
+          "UPDATE usr.kyc_applications SET status = 'REJECTED', reviewer_id = ?,"
+              + " rejection_reason = 'Unreadable document' WHERE id = ?",
+          UUID.randomUUID(),
+          id);
+    }
+  }
+
+  /**
+   * Approves a {@code PENDING_REVIEW} application by a random reviewer and copies its legal name
+   * into the profile, in one transaction and in that order, as the approval does: V8 accepts the
+   * name only from the application approved in the same transaction (J4) and requires it at commit
+   * (N3).
+   */
+  protected void approveWithLegalName(UUID applicationId) {
+    try {
+      inTransaction(
+          c -> {
+            update(
+                c,
+                "UPDATE usr.kyc_applications SET status = 'APPROVED', reviewer_id = ? WHERE id = ?",
+                UUID.randomUUID(),
+                applicationId);
+            update(
+                c,
+                "UPDATE usr.customers c SET first_name = k.first_name, last_name = k.last_name"
+                    + " FROM usr.kyc_applications k"
+                    + " WHERE k.id = ? AND c.user_id = k.customer_id",
+                applicationId);
+          });
+    } catch (SQLException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
   // Concurrency -------------------------------------------------------------------------------
+
+  /** The server process of {@code connection}, for {@link #awaitBlockedBy}. */
+  protected static int backendPid(Connection connection) throws SQLException {
+    return queryOne(connection, "SELECT pg_backend_pid()", Integer.class);
+  }
+
+  /**
+   * Waits until at least {@code count} backends wait on a lock held, directly or through a queue of
+   * other waiters, by backend {@code holderPid} (J9): a waiter counts only if {@code
+   * pg_blocking_pids} names the holder or a backend already counted. Waiters of other tests are not
+   * counted, so a test cannot pass without its own requests really waiting. Fails after 20 s.
+   */
+  protected void awaitBlockedBy(int holderPid, int count) {
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(20))
+        .pollInterval(Duration.ofMillis(20))
+        .until(() -> blockedBy(holderPid) >= count);
+  }
+
+  /** How many backends wait, directly or transitively, on backend {@code holderPid}. */
+  protected int blockedBy(int holderPid) {
+    return jdbc.queryForObject(
+        """
+        WITH RECURSIVE blocked(pid) AS (
+          SELECT a.pid FROM pg_stat_activity a
+          WHERE ?::int = ANY (pg_blocking_pids(a.pid))
+          UNION
+          SELECT a.pid FROM pg_stat_activity a
+          JOIN blocked b ON b.pid = ANY (pg_blocking_pids(a.pid))
+        )
+        SELECT count(*) FROM blocked
+        """,
+        Integer.class,
+        holderPid);
+  }
 
   /** Polls pg_stat_activity until backend {@code pid} waits on a lock, or fails after 20 s. */
   protected void awaitLockWait(int pid) throws InterruptedException {

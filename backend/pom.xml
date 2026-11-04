@@ -192,6 +192,9 @@
                     <include>com.portfolio.wallet.audit.application</include>
                     <include>com.portfolio.wallet.notification.application</include>
                     <include>com.portfolio.wallet.auth.application</include>
+                    <include>com.portfolio.wallet.user.application</include>
+                    <include>com.portfolio.wallet.wallet.application</include>
+                    <include>com.portfolio.wallet.ledger.application</include>
                   </includes>
                   <limits>
                     <limit>

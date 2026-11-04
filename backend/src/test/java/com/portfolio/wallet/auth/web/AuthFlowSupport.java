@@ -14,6 +14,8 @@ import com.portfolio.wallet.notification.application.RecordingEmailSender;
 import com.portfolio.wallet.support.DatabaseIntegrationTest;
 import com.portfolio.wallet.support.MutableClock;
 import jakarta.servlet.http.Cookie;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -116,18 +118,12 @@ abstract class AuthFlowSupport extends DatabaseIntegrationTest {
         Map.of("identifier", email, "purpose", "REGISTRATION", "otp", otp, "password", password));
   }
 
-  /** Waits until {@code count} backends wait on a lock, so an interleaving is really in place. */
-  void awaitLockWaiters(int count) {
-    await()
-        .atMost(Duration.ofSeconds(20))
-        .pollInterval(Duration.ofMillis(20))
-        .until(
-            () ->
-                jdbc.queryForObject(
-                        "SELECT count(*) FROM pg_stat_activity"
-                            + " WHERE wait_event_type = 'Lock' AND datname = current_database()",
-                        Integer.class)
-                    >= count);
+  /**
+   * Waits until {@code count} backends wait on a lock that {@code holder} holds (J9), so an
+   * interleaving is really in place and waiters of other tests do not count.
+   */
+  void awaitLockWaiters(Connection holder, int count) throws SQLException {
+    awaitBlockedBy(backendPid(holder), count);
   }
 
   MockHttpServletResponse resend(String identifier) throws Exception {

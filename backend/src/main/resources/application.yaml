@@ -90,6 +90,62 @@ logging:
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # The business calendar of every module (documentations/06 MVP-ADR-22): "today" for the
+  # date-of-birth check and the daily limits, and the zone in which emails state a time.
+  business-zone: Asia/Bangkok
+  # Email outbox for business notifications (documentations/06 MVP-ADR-25).
+  notification:
+    outbox:
+      # Turns the scheduled dispatcher on; tests turn it off and drive the dispatcher directly.
+      enabled: true
+      # MVP values (MVP-ADR-25): at most 5 attempts, retried after about 1, 5, 15 and 60 minutes.
+      # The list has one entry fewer than the attempts: the wait after attempts 1 to 4.
+      max-attempts: 5
+      backoff: 1m,5m,15m,60m
+      # How often the job looks for due rows, and how many it sends per run at most. Not
+      # documented values.
+      poll-interval: 10s
+      batch-size: 50
+      # How long a claimed row is held for one send before another run may claim it again; not a
+      # documented value. Keep it well above the SMTP timeouts below (spring.mail, 5 s each).
+      lease: 5m
+      # The lease must be longer than one send can take: connection + 8 x read + write timeout
+      # (spring.mail, each at most 2147483647 ms) + address-lookup-timeout + this margin, checked at
+      # startup (MVP value). Today: 5 + 40 + 5 + 5 + 30 = 85 s.
+      lease-safety-margin: 30s
+      # The longest the address lookup of one send may run in the database; a timeout fails the
+      # attempt (MVP value). Whole seconds.
+      address-lookup-timeout: 5s
+  wallet:
+    # Random wallet numbers drawn on a KYC approval before it fails because each was taken; a
+    # clash is very unlikely (10 random digits, documentations/06 MVP-ADR-20). Not a documented
+    # value.
+    wallet-number-attempts: 5
+  # Amount limits in THB (documentations/06 MVP-ADR-18), checked at startup (LimitProperties).
+  # Quoted, so YAML never reads them as floating-point numbers.
+  limits:
+    deposit:
+      minimum: "100.00"
+      maximum-per-transaction: "100000.00"
+      daily: "200000.00"
+    withdrawal:
+      minimum: "100.00"
+      maximum-per-transaction: "30000.00"
+      daily: "50000.00"
+    transfer:
+      minimum: "1.00"
+      maximum-per-transaction: "50000.00"
+      # Per wallet tier: BASIC from KYC level BASIC, VERIFIED from FULL.
+      daily:
+        basic: "100000.00"
+        verified: "500000.00"
+  # One ACCESS_DENIED audit row per user per window; further refusals in the window are logged
+  # only (owner, 2026-11-03, doc 08 §4B.2 Q12). In memory: per instance, reset on restart.
+  audit:
+    access-denied-window: 1m
+    # Memory bound; not a documented value. While full, refusals of untracked users are logged
+    # only, so a flood of accounts cannot reopen the audit table.
+    access-denied-max-tracked-users: 100000
   # The access token's iss claim; signing and validation read the same value.
   jwt:
     issuer: ${JWT_ISSUER:wallet}

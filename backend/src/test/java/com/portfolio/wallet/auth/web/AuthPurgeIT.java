@@ -480,7 +480,7 @@ class AuthPurgeIT extends AuthFlowSupport {
 
       Future<Integer> verifying =
           pool.submit(() -> verify(email, "REGISTRATION", code).getStatus());
-      awaitLockWaiters(1);
+      awaitLockWaiters(purging, 1);
       purging.commit();
 
       assertThat(verifying.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isEqualTo(400);
