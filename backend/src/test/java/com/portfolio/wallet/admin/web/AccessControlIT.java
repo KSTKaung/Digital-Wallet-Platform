@@ -211,7 +211,8 @@ class AccessControlIT extends AdminFlowSupport {
     for (String path :
         List.of(
             "/api/v1/wallet/xyz",
-            "/api/v1/wallets/lookup",
+            // The lookup itself exists since PR 4b; an unknown path in the same group.
+            "/api/v1/wallets/xyz",
             "/api/v1/kyc/xyz",
             "/api/v1/customers/me/xyz",
             "/api/v1/admin/kyc/xyz/abc/def",

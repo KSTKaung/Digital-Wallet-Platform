@@ -45,19 +45,30 @@ public final class WalletNumber {
    *     Luhn check digit
    */
   public static WalletNumber parse(String text) {
-    if (text == null || text.length() != LENGTH) {
+    if (!hasValidFormat(text)) {
       throw new InvalidWalletNumberException("wallet number must be 11 digits");
-    }
-    for (int i = 0; i < LENGTH; i++) {
-      char c = text.charAt(i);
-      if (c < '0' || c > '9') {
-        throw new InvalidWalletNumberException("wallet number must be 11 digits");
-      }
     }
     if (!hasValidCheckDigit(text)) {
       throw new InvalidWalletNumberException("wallet number check digit is invalid");
     }
     return new WalletNumber(text);
+  }
+
+  /**
+   * The first of the two validation steps (owner, 2026-11-04, X2): exactly 11 ASCII digits. Says
+   * nothing about the check digit.
+   */
+  public static boolean hasValidFormat(String text) {
+    if (text == null || text.length() != LENGTH) {
+      return false;
+    }
+    for (int i = 0; i < LENGTH; i++) {
+      char c = text.charAt(i);
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return true;
   }
 
   public String value() {
@@ -74,8 +85,21 @@ public final class WalletNumber {
     return (10 - sum % 10) % 10;
   }
 
-  /** Luhn validation of a complete number (payload plus check digit). */
-  static boolean hasValidCheckDigit(CharSequence number) {
+  /**
+   * The second validation step (X2): Luhn validation of a complete number (payload plus check
+   * digit).
+   *
+   * @param number a number that passed {@link #hasValidFormat}
+   * @throws IllegalArgumentException if it did not
+   */
+  public static boolean hasValidCheckDigit(CharSequence number) {
+    if (number == null || !hasValidFormat(number.toString())) {
+      throw new IllegalArgumentException("check the format first");
+    }
+    return luhnValid(number);
+  }
+
+  private static boolean luhnValid(CharSequence number) {
     int sum = 0;
     // The check digit itself is not doubled; every second digit to its left is.
     for (int i = number.length() - 1, position = 0; i >= 0; i--, position++) {

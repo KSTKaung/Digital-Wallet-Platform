@@ -43,6 +43,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     this.errors = errors;
   }
 
+  /**
+   * One marker per scope. The default marker is the filter name, here the class name for every
+   * instance, so of two instances whose paths overlap (the per-user and the money limit) the second
+   * would be skipped as already run.
+   */
+  @Override
+  protected String getAlreadyFilteredAttributeName() {
+    return RateLimitFilter.class.getName() + "." + scope + ALREADY_FILTERED_SUFFIX;
+  }
+
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
     return HttpMethod.OPTIONS.matches(request.getMethod()) || !limitedPaths.matches(request);

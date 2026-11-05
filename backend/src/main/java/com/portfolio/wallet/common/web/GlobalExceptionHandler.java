@@ -3,6 +3,7 @@ package com.portfolio.wallet.common.web;
 import com.portfolio.wallet.common.correlation.CorrelationId;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
+import com.portfolio.wallet.common.error.RateLimitedException;
 import com.portfolio.wallet.common.security.AccessDenial;
 import com.portfolio.wallet.common.security.AccessDenialAuditor;
 import com.portfolio.wallet.common.security.AccessDenials;
@@ -10,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -45,6 +47,16 @@ public class GlobalExceptionHandler {
 
   public GlobalExceptionHandler(ObjectProvider<AccessDenialAuditor> auditors) {
     this.auditors = auditors;
+  }
+
+  /** A database-backed limit (MVP-ADR-20): the same body and header as the filter's 429. */
+  @ExceptionHandler(RateLimitedException.class)
+  ResponseEntity<ApiErrorResponse> handleRateLimited(RateLimitedException ex) {
+    return ResponseEntity.status(ErrorCode.RATE_LIMITED.status())
+        .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.retryAfterSeconds()))
+        .body(
+            ApiErrorResponse.of(
+                ErrorCode.RATE_LIMITED, ex.getMessage(), CorrelationId.current().orElse(null)));
   }
 
   @ExceptionHandler(ApiException.class)

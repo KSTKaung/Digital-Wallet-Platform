@@ -117,6 +117,11 @@ public class SecurityConfig {
    */
   private static final String[] OTHER_API_PATHS = {"/api/v1/**"};
 
+  /** Money POSTs with their own per-customer limit (doc 02 §1.8); transfers join in PR 5. */
+  private static final String[] MONEY_PATHS = {
+    "/api/v1/wallet/deposits", "/api/v1/wallet/withdrawals"
+  };
+
   private static final String AUTH_PATHS = "/api/v1/auth/**";
   private static final String[] HEALTH_PATHS = {"/actuator/health", "/actuator/health/**"};
   private static final Duration RATE_LIMIT_WINDOW = Duration.ofMinutes(1);
@@ -191,6 +196,19 @@ public class SecurityConfig {
                 request -> authenticatedUser(),
                 new RateLimiter(
                     limits.otherRequestsPerMinutePerUser(),
+                    RATE_LIMIT_WINDOW,
+                    limits.maxTrackedKeys(),
+                    clock),
+                errors),
+            BearerTokenAuthenticationFilter.class)
+        // Money POSTs per customer (doc 02 §1.8), counted on top of the per-user limit above.
+        .addFilterAfter(
+            new RateLimitFilter(
+                "money",
+                anyPost(MONEY_PATHS),
+                request -> authenticatedUser(),
+                new RateLimiter(
+                    limits.moneyRequestsPerMinutePerCustomer(),
                     RATE_LIMIT_WINDOW,
                     limits.maxTrackedKeys(),
                     clock),

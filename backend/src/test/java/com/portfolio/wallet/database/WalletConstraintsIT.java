@@ -423,12 +423,135 @@ class WalletConstraintsIT extends DatabaseIntegrationTest {
           }
         });
 
-    assertThat(
-            jdbc.queryForObject(
-                "SELECT attempted_at FROM wallet.lookup_attempts WHERE user_id = ?",
-                OffsetDateTime.class,
-                user))
-        .isEqualTo(now[0]);
+    // V10 (Y1): the start of the INSERT statement, which is at or after the transaction's start.
+    OffsetDateTime stamped =
+        jdbc.queryForObject(
+            "SELECT attempted_at FROM wallet.lookup_attempts WHERE user_id = ?",
+            OffsetDateTime.class,
+            user);
+    assertThat(stamped).isAfterOrEqualTo(now[0]).isNotEqualTo(BACKDATED);
+  }
+
+  @Test
+  void attemptsAreStampedWithTheirStatementNotTheirTransaction() throws SQLException {
+    UUID user = UUID.randomUUID();
+    OffsetDateTime[] times = new OffsetDateTime[2];
+
+    inTransaction(
+        c -> {
+          times[0] = transactionNow(c);
+          queryOne(c, "SELECT pg_sleep(0.2)::text", String.class);
+          update(
+              c,
+              "INSERT INTO wallet.lookup_attempts (user_id, client_ip) VALUES (?, '192.0.2.2')",
+              user);
+        });
+
+    OffsetDateTime stamped =
+        jdbc.queryForObject(
+            "SELECT attempted_at FROM wallet.lookup_attempts WHERE user_id = ?",
+            OffsetDateTime.class,
+            user);
+    assertThat(stamped).isAfter(times[0].plusNanos(150_000_000));
+  }
+
+  // V10 (Y4): idempotency records hold only states the application writes ---------------------
+
+  private static Map<String, Object> validIdempotencyRecord() {
+    OffsetDateTime created = OffsetDateTime.now();
+    return row(
+        "customer_id", UUID.randomUUID(),
+        "operation", "DEPOSIT",
+        "idempotency_key", UUID.randomUUID(),
+        "request_hash", "0123456789abcdef".repeat(4),
+        "created_at", created,
+        "expires_at", created.plusDays(1));
+  }
+
+  @Test
+  void validIdempotencyRecordStatesAreAccepted() throws SQLException {
+    insert("wallet.idempotency_records", validIdempotencyRecord());
+    insert(
+        "wallet.idempotency_records",
+        with(
+            with(validIdempotencyRecord(), "response_status", 201),
+            "response_body",
+            jsonb("{\"id\": \"x\"}")));
+    insert(
+        "wallet.idempotency_records",
+        with(
+            with(validIdempotencyRecord(), "response_status", 409),
+            "response_body",
+            jsonb("{\"errorCode\": \"INSUFFICIENT_BALANCE\", \"message\": \"m\"}")));
+  }
+
+  @Test
+  void anIdempotencyOutcomeHasBothStatusAndBodyOrNeither() {
+    assertCheckViolation(
+        "ck_wallet_idempotency_records_outcome",
+        () ->
+            insert(
+                "wallet.idempotency_records",
+                with(validIdempotencyRecord(), "response_status", 201)));
+    assertCheckViolation(
+        "ck_wallet_idempotency_records_outcome",
+        () ->
+            insert(
+                "wallet.idempotency_records",
+                with(validIdempotencyRecord(), "response_body", jsonb("{}"))));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(ints = {0, 199, 600, -1})
+  void anIdempotencyStatusIsAnHttpStatus(int status) {
+    assertCheckViolation(
+        "ck_wallet_idempotency_records_status",
+        () ->
+            insert(
+                "wallet.idempotency_records",
+                with(
+                    with(validIdempotencyRecord(), "response_status", status),
+                    "response_body",
+                    jsonb("{}"))));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+        ""
+      })
+  void anIdempotencyRequestHashIsLowerCaseSha256Hex(String hash) {
+    assertCheckViolation(
+        "ck_wallet_idempotency_records_request_hash",
+        () ->
+            insert(
+                "wallet.idempotency_records",
+                with(validIdempotencyRecord(), "request_hash", hash)));
+  }
+
+  @Test
+  void anIdempotencyRecordExpiresAfterItWasCreated() {
+    Map<String, Object> record = validIdempotencyRecord();
+    assertCheckViolation(
+        "ck_wallet_idempotency_records_expiry",
+        () ->
+            insert(
+                "wallet.idempotency_records",
+                with(record, "expires_at", record.get("created_at"))));
+  }
+
+  private static org.postgresql.util.PGobject jsonb(String json) {
+    try {
+      org.postgresql.util.PGobject value = new org.postgresql.util.PGobject();
+      value.setType("jsonb");
+      value.setValue(json);
+      return value;
+    } catch (SQLException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   @Test

@@ -19,6 +19,30 @@ class SchemaObjectsIT extends DatabaseIntegrationTest {
     "auth", "usr", "wallet", "transfer", "ledger", "risk", "audit", "notification"
   };
 
+  /** V10 (Y4, AA2): the four idempotency checks exist and are validated against existing rows. */
+  @Test
+  void theIdempotencyRecordChecksExistAndAreValidated() {
+    List<Map<String, Object>> checks =
+        jdbc.queryForList(
+            """
+            SELECT conname, convalidated FROM pg_constraint
+            WHERE conrelid = 'wallet.idempotency_records'::regclass AND contype = 'c'
+              AND conname IN ('ck_wallet_idempotency_records_outcome',
+                              'ck_wallet_idempotency_records_status',
+                              'ck_wallet_idempotency_records_request_hash',
+                              'ck_wallet_idempotency_records_expiry')
+            """);
+
+    assertThat(checks)
+        .extracting(row -> row.get("conname"))
+        .containsExactlyInAnyOrder(
+            "ck_wallet_idempotency_records_outcome",
+            "ck_wallet_idempotency_records_status",
+            "ck_wallet_idempotency_records_request_hash",
+            "ck_wallet_idempotency_records_expiry");
+    assertThat(checks).allSatisfy(row -> assertThat(row.get("convalidated")).isEqualTo(true));
+  }
+
   /** Pinning search_path stops a caller from shadowing pg_catalog objects in a trigger. */
   @Test
   void everyFunctionInTheModuleSchemasPinsItsSearchPath() {
