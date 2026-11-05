@@ -64,9 +64,14 @@ public class WalletRepository {
         .single();
   }
 
+  /** The wallet with exactly this number ({@code uq_wallets_wallet_number}), as committed now. */
+  public Optional<WalletRow> findByWalletNumber(String walletNumber) {
+    return find("wallet_number = :value", walletNumber, "");
+  }
+
   /** The customer's wallet ({@code uq_wallets_customer}: at most one), as committed now. */
   public Optional<WalletRow> findByCustomer(UUID customerId) {
-    return findByCustomer(customerId, "");
+    return find("customer_id = :value", customerId, "");
   }
 
   /**
@@ -74,19 +79,20 @@ public class WalletRepository {
    * wallet (doc 07 §8). One statement, one row, so there is no order to get wrong.
    */
   public Optional<WalletRow> findByCustomerForUpdate(UUID customerId) {
-    return findByCustomer(customerId, " FOR UPDATE");
+    return find("customer_id = :value", customerId, " FOR UPDATE");
   }
 
-  // The suffix is one of this class's constants, never client input.
-  private Optional<WalletRow> findByCustomer(UUID customerId, String lockClause) {
+  // The condition and the suffix are this class's constants, never client input.
+  private Optional<WalletRow> find(String condition, Object value, String lockClause) {
     return jdbc.sql(
             """
             SELECT id, wallet_number, customer_id, tier, status, currency, available_balance,
                    reserved_balance, version, created_at, updated_at
-            FROM wallet.wallets WHERE customer_id = :customer
+            FROM wallet.wallets WHERE
             """
+                + condition
                 + lockClause)
-        .param("customer", customerId)
+        .param("value", value)
         .query(
             (rs, row) ->
                 new WalletRow(
@@ -102,6 +108,24 @@ public class WalletRepository {
                     Timestamps.read(rs, "created_at"),
                     Timestamps.read(rs, "updated_at")))
         .optional();
+  }
+
+  /**
+   * Sets the available balance with the optimistic {@code version} check (MVP-ADR-08). {@code
+   * ck_wallets_available_balance} ({@code >= 0}) stays the last guard against an overdraft.
+   *
+   * @return 1, or 0 if the version is no longer {@code expectedVersion}
+   */
+  public int updateAvailableBalance(UUID id, BigDecimal availableBalance, long expectedVersion) {
+    return jdbc.sql(
+            """
+            UPDATE wallet.wallets SET available_balance = :available, version = version + 1
+            WHERE id = :id AND version = :version
+            """)
+        .param("available", availableBalance)
+        .param("id", id)
+        .param("version", expectedVersion)
+        .update();
   }
 
   /**

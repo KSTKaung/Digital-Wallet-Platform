@@ -5,9 +5,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Binds {@link WalletProperties} and {@link LimitProperties}; builds the {@link LimitPolicy}. */
+/**
+ * Binds {@link WalletProperties}, {@link LimitProperties} and {@link IdempotencyProperties}; builds
+ * the {@link LimitPolicy}.
+ */
 @Configuration
-@EnableConfigurationProperties({WalletProperties.class, LimitProperties.class})
+@EnableConfigurationProperties({
+  WalletProperties.class,
+  LimitProperties.class,
+  IdempotencyProperties.class,
+  LookupProperties.class
+})
 class WalletConfiguration {
 
   @Bean

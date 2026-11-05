@@ -52,7 +52,7 @@ public final class Money implements Comparable<Money> {
     // 1E-999999999 or 1E+999999999 would otherwise make setScale build an enormous power of ten.
     BigDecimal stripped = amount.stripTrailingZeros();
     if (stripped.precision() - stripped.scale() > MAX_INTEGER_DIGITS) {
-      throw new InvalidAmountException("amount exceeds the maximum number of integer digits");
+      throw new AmountTooLargeException("amount exceeds the maximum number of integer digits");
     }
     if (stripped.scale() > SCALE) {
       throw new InvalidAmountException("amount has more than 2 decimal places");

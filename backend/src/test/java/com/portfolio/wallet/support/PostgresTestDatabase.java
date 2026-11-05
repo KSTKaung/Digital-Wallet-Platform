@@ -62,6 +62,7 @@ public final class PostgresTestDatabase {
     // Raised so that no flow test trips the limiter by accident; the limiter has its own tests.
     registry.add("app.rate-limit.auth-requests-per-minute-per-ip", () -> UNTRIPPABLE_LIMIT);
     registry.add("app.rate-limit.other-requests-per-minute-per-user", () -> UNTRIPPABLE_LIMIT);
+    registry.add("app.rate-limit.money-requests-per-minute-per-customer", () -> UNTRIPPABLE_LIMIT);
     registry.add("app.auth.purge.enabled", () -> false);
   }
 
@@ -76,6 +77,9 @@ public final class PostgresTestDatabase {
     registry.add("spring.flyway.placeholders[app_role]", () -> APP_ROLE);
     // Tests drive the outbox dispatcher themselves, so no background run races them.
     registry.add("app.notification.outbox.enabled", () -> false);
+    // Tests call the idempotency purge themselves, for the same reason.
+    registry.add("app.wallet.idempotency.purge.enabled", () -> false);
+    registry.add("app.wallet.lookup.purge.enabled", () -> false);
     TestSecrets.values().forEach((name, value) -> registry.add(name, () -> value));
   }
 

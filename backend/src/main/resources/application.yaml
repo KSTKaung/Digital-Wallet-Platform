@@ -121,6 +121,29 @@ app:
     # clash is very unlikely (10 random digits, documentations/06 MVP-ADR-20). Not a documented
     # value.
     wallet-number-attempts: 5
+    # Idempotency-Key records of deposits and withdrawals (documentations/02 §1.4; doc 07 D04).
+    idempotency:
+      # How long a key is retained: 24 hours (doc 02 §1.4; doc 07 D04). At most 30 days (doc 03 §8).
+      ttl: 24h
+      purge:
+        # Turns the scheduled purge on; tests turn it off and call the purge directly.
+        enabled: true
+        # How often expired records are deleted, and the most rows one DELETE removes. Not
+        # documented values.
+        interval: 1h
+        batch-size: 500
+    # Recipient lookup by wallet number (documentations/06 MVP-ADR-20; doc 07 D26): sliding windows
+    # stored in PostgreSQL, so they hold across restarts and instances.
+    lookup:
+      per-user: 10
+      per-ip: 30
+      window: 1m
+      purge:
+        # Deletes attempts older than the window; tests turn it off and call the purge directly.
+        enabled: true
+        # Not documented values.
+        interval: 1h
+        batch-size: 500
   # Amount limits in THB (documentations/06 MVP-ADR-18), checked at startup (LimitProperties).
   # Quoted, so YAML never reads them as floating-point numbers.
   limits:
@@ -155,6 +178,8 @@ app:
   rate-limit:
     auth-requests-per-minute-per-ip: 10
     other-requests-per-minute-per-user: 300
+    # Deposits and withdrawals (transfers in PR 5), per customer (doc 02 §1.8).
+    money-requests-per-minute-per-customer: 30
     # Memory bound per limiter; not a documented value.
     max-tracked-keys: 100000
   # Authentication parameters (documentations/06 MVP-ADR-23). JWT_PRIVATE_KEY, JWT_KID,

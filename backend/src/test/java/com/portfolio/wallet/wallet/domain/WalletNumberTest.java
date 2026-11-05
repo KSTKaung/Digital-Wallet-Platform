@@ -81,6 +81,25 @@ class WalletNumberTest {
     assertThat(WalletNumber.generate(zeros).value()).isEqualTo("00000000000");
   }
 
+  /** Owner, 2026-11-04, X2: format and check digit are two separate steps. */
+  @Test
+  void formatAndCheckDigitAreSeparateSteps() {
+    assertThat(WalletNumber.hasValidFormat(KNOWN_VALID)).isTrue();
+    assertThat(WalletNumber.hasValidCheckDigit(KNOWN_VALID)).isTrue();
+
+    String wrongDigit = "79927398714";
+    assertThat(WalletNumber.hasValidFormat(wrongDigit)).isTrue();
+    assertThat(WalletNumber.hasValidCheckDigit(wrongDigit)).isFalse();
+
+    for (String bad : new String[] {null, "", "7992739871", "799273987130", "7992739871a", "７９"}) {
+      assertThat(WalletNumber.hasValidFormat(bad)).as(String.valueOf(bad)).isFalse();
+    }
+    assertThatThrownBy(() -> WalletNumber.hasValidCheckDigit("7992739871"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> WalletNumber.hasValidCheckDigit(null))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
   @Test
   void valueSemantics() {
     assertThat(WalletNumber.parse(KNOWN_VALID))
