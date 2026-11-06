@@ -19,27 +19,67 @@ class SchemaObjectsIT extends DatabaseIntegrationTest {
     "auth", "usr", "wallet", "transfer", "ledger", "risk", "audit", "notification"
   };
 
-  /** V10 (Y4, AA2): the four idempotency checks exist and are validated against existing rows. */
-  @Test
-  void theIdempotencyRecordChecksExistAndAreValidated() {
+  /**
+   * V10 (Y4, AA2) for the wallet table and V11 (PR 5 plan Q2) for the transfer table: the four
+   * idempotency checks exist on each module's own table and are validated against existing rows.
+   */
+  @ParameterizedTest(name = "{0}")
+  @CsvSource({"wallet", "transfer"})
+  void theIdempotencyRecordChecksExistAndAreValidated(String module) {
+    String prefix = "ck_" + module + "_idempotency_records_";
     List<Map<String, Object>> checks =
         jdbc.queryForList(
             """
             SELECT conname, convalidated FROM pg_constraint
-            WHERE conrelid = 'wallet.idempotency_records'::regclass AND contype = 'c'
-              AND conname IN ('ck_wallet_idempotency_records_outcome',
-                              'ck_wallet_idempotency_records_status',
-                              'ck_wallet_idempotency_records_request_hash',
-                              'ck_wallet_idempotency_records_expiry')
-            """);
+            WHERE conrelid = (? || '.idempotency_records')::regclass AND contype = 'c'
+              AND conname = ANY (?::text[])
+            """,
+            module,
+            (Object)
+                new String[] {
+                  prefix + "outcome", prefix + "status", prefix + "request_hash", prefix + "expiry"
+                });
 
     assertThat(checks)
         .extracting(row -> row.get("conname"))
         .containsExactlyInAnyOrder(
-            "ck_wallet_idempotency_records_outcome",
-            "ck_wallet_idempotency_records_status",
-            "ck_wallet_idempotency_records_request_hash",
-            "ck_wallet_idempotency_records_expiry");
+            prefix + "outcome", prefix + "status", prefix + "request_hash", prefix + "expiry");
+    assertThat(checks).allSatisfy(row -> assertThat(row.get("convalidated")).isEqualTo(true));
+  }
+
+  /** V11 (D1): the transfer category check and the one-assessment-per-transfer rule, validated. */
+  @Test
+  void theTransferIntegrityConstraintsExistAndAreValidated() {
+    List<Map<String, Object>> constraints =
+        jdbc.queryForList(
+            """
+            SELECT conname, contype::text AS type, convalidated FROM pg_constraint
+            WHERE conrelid = 'transfer.transfers'::regclass
+              AND conname IN ('ck_transfers_rejection_reason_category',
+                              'uq_transfers_risk_assessment')
+            """);
+
+    assertThat(constraints)
+        .extracting(row -> row.get("conname") + ":" + row.get("type"))
+        .containsExactlyInAnyOrder(
+            "ck_transfers_rejection_reason_category:c", "uq_transfers_risk_assessment:u");
+    assertThat(constraints).allSatisfy(row -> assertThat(row.get("convalidated")).isEqualTo(true));
+  }
+
+  /** V11 replaced the outbox kind check in place: one check on the column, validated. */
+  @Test
+  void theOutboxHasExactlyOneValidatedKindCheck() {
+    List<Map<String, Object>> checks =
+        jdbc.queryForList(
+            """
+            SELECT conname, convalidated FROM pg_constraint
+            WHERE conrelid = 'notification.notifications'::regclass AND contype = 'c'
+              AND pg_get_constraintdef(oid) LIKE '%kind%'
+            """);
+
+    assertThat(checks)
+        .extracting(row -> row.get("conname"))
+        .containsExactly("ck_notifications_kind");
     assertThat(checks).allSatisfy(row -> assertThat(row.get("convalidated")).isEqualTo(true));
   }
 

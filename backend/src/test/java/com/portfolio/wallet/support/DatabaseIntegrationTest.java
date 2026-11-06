@@ -371,14 +371,43 @@ public abstract class DatabaseIntegrationTest {
         "SELECT transfer_id FROM risk.risk_assessments WHERE id = ?", UUID.class, assessmentId);
   }
 
-  /** A review row for {@code assessmentId}, naming the assessment's transfer (composite FK). */
+  /**
+   * A review row for {@code assessmentId}, naming the assessment's transfer (composite FK), of the
+   * D2 case that {@code action} and {@code actor} name (V11; doc 06 MVP-ADR-24 "Review outcomes"):
+   * APPROVE and REJECT by staff, CANCEL by the customer, EXPIRE by the system, by the job without
+   * an actor or after a late approval with one.
+   */
   protected Map<String, Object> validRiskReview(UUID assessmentId, String action, UUID actor) {
-    return row(
-        "id", UUID.randomUUID(),
-        "transfer_id", transferOfAssessment(assessmentId),
-        "assessment_id", assessmentId,
-        "action", action,
-        "actor_user_id", actor);
+    Map<String, Object> review =
+        row(
+            "id", UUID.randomUUID(),
+            "transfer_id", transferOfAssessment(assessmentId),
+            "assessment_id", assessmentId,
+            "action", action,
+            "actor_user_id", actor);
+    switch (action) {
+      case "APPROVE" -> {
+        review.put("decided_by", "STAFF");
+        review.put("requested_action", "APPROVE");
+      }
+      case "REJECT" -> {
+        review.put("decided_by", "STAFF");
+        review.put("requested_action", "REJECT");
+        review.put("reason_category", "STAFF_REJECTION");
+        review.put("reason", "Purpose of the transfer could not be confirmed");
+      }
+      case "CANCEL" -> {
+        review.put("decided_by", "CUSTOMER");
+        review.put("requested_action", "CANCEL");
+      }
+      case "EXPIRE" -> {
+        review.put("decided_by", "SYSTEM");
+        review.put("requested_action", actor == null ? null : "APPROVE");
+        review.put("system_reason", "REVIEW_DEADLINE_PASSED");
+      }
+      default -> review.put("decided_by", "STAFF");
+    }
+    return review;
   }
 
   // Auth fixtures -----------------------------------------------------------------------------

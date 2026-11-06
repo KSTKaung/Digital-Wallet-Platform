@@ -141,9 +141,49 @@ class NotificationConstraintsIT extends DatabaseIntegrationTest {
                     3)));
   }
 
-  /** Only the business emails of MVP-ADR-25: an OTP can never be stored. */
+  /** Every business email of MVP-ADR-25, with the money kinds of V11 (PR 5 plan Q9). */
   @ParameterizedTest
-  @ValueSource(strings = {"OTP", "ACCOUNT_LOCKED", "EXISTING_ACCOUNT_NOTICE", "kyc_approved"})
+  @ValueSource(
+      strings = {
+        "KYC_APPROVED",
+        "KYC_REJECTED",
+        "WALLET_FROZEN",
+        "WALLET_UNFROZEN",
+        "DEPOSIT_COMPLETED",
+        "WITHDRAWAL_COMPLETED",
+        "TRANSFER_SENT",
+        "TRANSFER_RECEIVED",
+        "TRANSFER_HELD",
+        "TRANSFER_REJECTED",
+        "TRANSFER_CANCELLED",
+        "TRANSFER_EXPIRED",
+        "TRANSFER_REVIEW_EXPIRING"
+      })
+  void everyOutboxKindIsAccepted(String kind) throws SQLException {
+    UUID eventId = UUID.randomUUID();
+    insert(
+        "notification.notifications",
+        row("event_id", eventId, "user_id", UUID.randomUUID(), "kind", kind));
+
+    assertThat(read(eventId).get("status")).isEqualTo("PENDING");
+  }
+
+  /**
+   * Only the business emails of MVP-ADR-25: an OTP can never be stored. There is no kind for a risk
+   * block, and none that tells a receiver about a transfer before it completes (V11, Q9).
+   */
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "OTP",
+        "ACCOUNT_LOCKED",
+        "EXISTING_ACCOUNT_NOTICE",
+        "kyc_approved",
+        "TRANSFER_BLOCKED",
+        "RISK_BLOCKED",
+        "TRANSFER_INCOMING_HELD",
+        "transfer_sent"
+      })
   void onlyOutboxKindsAreAccepted(String kind) {
     assertCheckViolation(
         "ck_notifications_kind",
