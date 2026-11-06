@@ -144,6 +144,19 @@ app:
         # Not documented values.
         interval: 1h
         batch-size: 500
+  transfer:
+    # Idempotency-Key records of transfers (documentations/02 §1.4; doc 06 MVP-ADR-06; doc 07 D04),
+    # in the transfer module's own table, apart from the wallet's records.
+    idempotency:
+      # How long a key is retained: 24 hours (doc 02 §1.4; doc 07 D04). At most 30 days (doc 03 §8).
+      ttl: 24h
+      purge:
+        # Turns the scheduled purge on; tests turn it off and call the purge directly.
+        enabled: true
+        # How often expired records are deleted (hourly, MVP-ADR-06), and the most rows one DELETE
+        # removes (500 per batch, MVP-ADR-06).
+        interval: 1h
+        batch-size: 500
   # Amount limits in THB (documentations/06 MVP-ADR-18), checked at startup (LimitProperties).
   # Quoted, so YAML never reads them as floating-point numbers.
   limits:

@@ -1,5 +1,6 @@
 package com.portfolio.wallet.wallet.application;
 
+import com.portfolio.wallet.common.idempotency.IdempotencyRequest;
 import com.portfolio.wallet.wallet.domain.Operation;
 import com.portfolio.wallet.wallet.domain.RequestFingerprint;
 import java.util.Objects;
@@ -9,7 +10,7 @@ import java.util.UUID;
  * An idempotent deposit or withdrawal: the client's {@code Idempotency-Key} and the fingerprint of
  * the validated request, which names the customer and the operation. The record's key is {@code
  * (customer, operation, key)} (documentations/02 §1.4), so another customer's identical key is a
- * separate key.
+ * separate key. The wallet's adapter of the engine's {@link IdempotencyRequest}.
  */
 public record IdempotentRequest(UUID key, RequestFingerprint fingerprint) {
 
@@ -33,5 +34,15 @@ public record IdempotentRequest(UUID key, RequestFingerprint fingerprint) {
 
   String requestHash() {
     return fingerprint.sha256Hex();
+  }
+
+  IdempotencyRequest toEngineRequest() {
+    return new IdempotencyRequest(customerId(), operation(), key, requestHash());
+  }
+
+  /** Names the operation only: the {@code Idempotency-Key} and the hash are never printed. */
+  @Override
+  public String toString() {
+    return "IdempotentRequest[operation=" + operation() + "]";
   }
 }

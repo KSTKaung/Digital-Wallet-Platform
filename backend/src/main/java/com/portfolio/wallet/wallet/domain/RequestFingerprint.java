@@ -1,10 +1,7 @@
 package com.portfolio.wallet.wallet.domain;
 
+import com.portfolio.wallet.common.fingerprint.CanonicalForm;
 import com.portfolio.wallet.common.money.Money;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -34,7 +31,8 @@ import java.util.regex.Pattern;
  * so an amount such as {@code 10.001} never reaches this class. Text values are hashed exactly as
  * validated (no trimming or Unicode normalisation here); the length prefix keeps a value that
  * contains {@code \n} or {@code =} unambiguous, and {@code null} differs from the empty string.
- * Changing this form changes every hash: give it a new version line.
+ * Changing this form changes every hash: give it a new version line. The lines are written, and the
+ * hash computed, by the shared {@link CanonicalForm}; this class fixes which lines there are.
  */
 public final class RequestFingerprint {
 
@@ -52,7 +50,7 @@ public final class RequestFingerprint {
     this.operation = operation;
     this.customerId = customerId;
     this.canonicalForm = canonicalForm;
-    this.sha256Hex = sha256Hex(canonicalForm);
+    this.sha256Hex = CanonicalForm.sha256Hex(canonicalForm);
   }
 
   public static Builder builder(Operation operation, UUID customerId, Money amount) {
@@ -75,16 +73,6 @@ public final class RequestFingerprint {
   /** 64 lower-case hex characters ({@code request_hash varchar(64)}). */
   public String sha256Hex() {
     return sha256Hex;
-  }
-
-  private static String sha256Hex(String text) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
-    } catch (NoSuchAlgorithmException e) {
-      // Every Java platform must provide SHA-256.
-      throw new IllegalStateException("SHA-256 is not available", e);
-    }
   }
 
   /** Builds a fingerprint; extra fields are part of the hash in the order they are added. */
@@ -121,20 +109,14 @@ public final class RequestFingerprint {
     }
 
     public RequestFingerprint build() {
-      StringBuilder form = new StringBuilder(128);
-      line(form, VERSION_LINE);
-      line(form, "operation=" + operation.name());
-      line(form, "customer=" + customerId);
-      line(form, "amount=" + amount.amount().toPlainString());
-      line(form, "currency=" + amount.currency().getCurrencyCode());
-      fields.forEach(
-          (name, value) ->
-              line(form, name + "=" + (value == null ? "null" : value.length() + ":" + value)));
-      return new RequestFingerprint(operation, customerId, form.toString());
-    }
-
-    private static void line(StringBuilder form, String text) {
-      form.append(text).append('\n');
+      CanonicalForm.Builder form =
+          CanonicalForm.version(VERSION_LINE)
+              .fixed("operation", operation.name())
+              .fixed("customer", customerId.toString())
+              .fixed("amount", amount.amount().toPlainString())
+              .fixed("currency", amount.currency().getCurrencyCode());
+      fields.forEach(form::text);
+      return new RequestFingerprint(operation, customerId, form.build());
     }
   }
 }

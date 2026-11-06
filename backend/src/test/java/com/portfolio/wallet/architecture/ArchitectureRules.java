@@ -73,7 +73,8 @@ final class ArchitectureRules {
   }
 
   /**
-   * The financial core and {@code Money} are pure Java (documentations/06 MVP-ADR-07): no JPA,
+   * The financial core, {@code Money} and the request-fingerprint core that the money domains hash
+   * with ({@code common.fingerprint}) are pure Java (documentations/06 MVP-ADR-07): no JPA,
    * Hibernate or Spring. JPA entities and mappers live in {@code persistence}. The rule must match
    * at least one class, so it cannot pass vacuously.
    */
@@ -85,7 +86,8 @@ final class ArchitectureRules {
             "..transfer.domain..",
             "..ledger.domain..",
             "..risk.domain..",
-            "..common.money..")
+            "..common.money..",
+            "..common.fingerprint..")
         .should()
         .dependOnClassesThat()
         .resideInAnyPackage("jakarta.persistence..", "org.hibernate..", "org.springframework..")

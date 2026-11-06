@@ -79,6 +79,7 @@ public final class PostgresTestDatabase {
     registry.add("app.notification.outbox.enabled", () -> false);
     // Tests call the idempotency purge themselves, for the same reason.
     registry.add("app.wallet.idempotency.purge.enabled", () -> false);
+    registry.add("app.transfer.idempotency.purge.enabled", () -> false);
     registry.add("app.wallet.lookup.purge.enabled", () -> false);
     TestSecrets.values().forEach((name, value) -> registry.add(name, () -> value));
   }
