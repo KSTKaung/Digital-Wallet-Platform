@@ -74,9 +74,10 @@ final class ArchitectureRules {
 
   /**
    * The financial core, {@code Money} and the request-fingerprint core that the money domains hash
-   * with ({@code common.fingerprint}) are pure Java (documentations/06 MVP-ADR-07): no JPA,
-   * Hibernate or Spring. JPA entities and mappers live in {@code persistence}. The rule must match
-   * at least one class, so it cannot pass vacuously.
+   * with ({@code common.fingerprint}) and the free-text rules the review outcome applies ({@code
+   * common.text}) are pure Java (documentations/06 MVP-ADR-07): no JPA, Hibernate or Spring. JPA
+   * entities and mappers live in {@code persistence}. The rule must match at least one class, so it
+   * cannot pass vacuously.
    */
   static ArchRule financialDomainIsFrameworkFree() {
     return noClasses()
@@ -87,7 +88,8 @@ final class ArchitectureRules {
             "..ledger.domain..",
             "..risk.domain..",
             "..common.money..",
-            "..common.fingerprint..")
+            "..common.fingerprint..",
+            "..common.text..")
         .should()
         .dependOnClassesThat()
         .resideInAnyPackage("jakarta.persistence..", "org.hibernate..", "org.springframework..")
@@ -137,7 +139,9 @@ final class ArchitectureRules {
    * ledger). The wallet module never depends on the modules that call it, and the ledger, the
    * system of record, depends on none of the modules that move money or hold customer data. Cycles
    * are refused separately; this rule names the intended direction, so a new dependency that would
-   * reverse it fails even before a cycle exists.
+   * reverse it fails even before a cycle exists. The risk module sits below transfer and admin: it
+   * never calls them, nor the modules that hold wallets or customer data (MVP-ADR-24
+   * "Dependencies").
    */
   static ArchRule moneyCoreDependsDownwardOnly(String root) {
     return CompositeArchRule.of(
@@ -165,6 +169,21 @@ final class ArchitectureRules {
                 .as(
                     "the ledger module does not depend on wallet, transfer, user, admin, auth or"
                         + " risk"))
+        .and(
+            noClasses()
+                .that()
+                .resideInAPackage(root + ".risk..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(
+                    root + ".transfer..",
+                    root + ".wallet..",
+                    root + ".admin..",
+                    root + ".auth..",
+                    root + ".user..")
+                .as(
+                    "the risk module does not depend on transfer, wallet, admin, auth or user"
+                        + " (documentations/06 MVP-ADR-24 \"Dependencies\")"))
         .as("the money core depends downward only (admin → user → wallet → ledger)");
   }
 

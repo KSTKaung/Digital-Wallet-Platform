@@ -92,7 +92,84 @@ class RiskAndAuditConstraintsIT extends DatabaseIntegrationTest {
         () ->
             insert(
                 "risk.risk_rule_hits",
-                row("assessment_id", assessment, "rule_code", "LARGE_AMOUNT", "weight", weight)));
+                row(
+                    "assessment_id",
+                    assessment,
+                    "rule_code",
+                    "TRANSFER_AMOUNT",
+                    "weight",
+                    weight)));
+  }
+
+  // Rule codes (V12; MVP-ADR-24 "Score") -----------------------------------------------------
+
+  /** Every MVP rule code is accepted, one hit per rule on the same assessment. */
+  @Test
+  void theFourRuleCodesAreAccepted() throws SQLException {
+    UUID assessment = newRiskAssessment();
+    for (String code :
+        new String[] {
+          "TRANSFER_AMOUNT", "TRANSFER_FREQUENCY", "NEW_RECIPIENT", "NEW_SENDER_WALLET"
+        }) {
+      insert(
+          "risk.risk_rule_hits", row("assessment_id", assessment, "rule_code", code, "weight", 10));
+    }
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM risk.risk_rule_hits WHERE assessment_id = ?",
+                Integer.class,
+                assessment))
+        .isEqualTo(4);
+  }
+
+  /** Anything else is refused: an old fixture code, another spelling, a blank. */
+  @ParameterizedTest(name = "\"{0}\"")
+  @ValueSource(
+      strings = {
+        "LARGE_AMOUNT",
+        "transfer_amount",
+        "TRANSFER_AMOUNT ",
+        "NEW_WALLET",
+        "VELOCITY",
+        ""
+      })
+  void otherRuleCodesAreRejected(String code) throws SQLException {
+    UUID assessment = newRiskAssessment();
+
+    assertCheckViolation(
+        "ck_risk_rule_hits_rule_code",
+        () ->
+            insert(
+                "risk.risk_rule_hits",
+                row("assessment_id", assessment, "rule_code", code, "weight", 10)));
+  }
+
+  @Test
+  void aRuleHitNeedsARuleCode() throws SQLException {
+    UUID assessment = newRiskAssessment();
+
+    assertSqlState(
+        NOT_NULL_VIOLATION,
+        () ->
+            insert(
+                "risk.risk_rule_hits",
+                row("assessment_id", assessment, "rule_code", null, "weight", 10)));
+  }
+
+  @Test
+  void aRuleHitTwiceOnOneAssessmentIsRejected() throws SQLException {
+    UUID assessment = newRiskAssessment();
+    insert(
+        "risk.risk_rule_hits",
+        row("assessment_id", assessment, "rule_code", "NEW_RECIPIENT", "weight", 15));
+
+    assertUniqueViolation(
+        "pk_risk_rule_hits",
+        () ->
+            insert(
+                "risk.risk_rule_hits",
+                row("assessment_id", assessment, "rule_code", "NEW_RECIPIENT", "weight", 20)));
   }
 
   // Risk reviews ------------------------------------------------------------------------------

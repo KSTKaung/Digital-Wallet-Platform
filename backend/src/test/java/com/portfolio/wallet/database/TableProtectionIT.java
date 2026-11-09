@@ -310,7 +310,7 @@ class TableProtectionIT extends DatabaseIntegrationTest {
         UUID assessment = newRiskAssessment();
         insert(
             "risk.risk_rule_hits",
-            row("assessment_id", assessment, "rule_code", "LARGE_AMOUNT", "weight", 30));
+            row("assessment_id", assessment, "rule_code", "TRANSFER_AMOUNT", "weight", 30));
         yield assessment;
       }
       case "risk.risk_reviews" -> {

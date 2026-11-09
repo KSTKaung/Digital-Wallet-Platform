@@ -66,6 +66,23 @@ class SchemaObjectsIT extends DatabaseIntegrationTest {
     assertThat(constraints).allSatisfy(row -> assertThat(row.get("convalidated")).isEqualTo(true));
   }
 
+  /** V12: the rule-code check exists on the rule hits and is validated against existing rows. */
+  @Test
+  void theRuleCodeCheckExistsAndIsValidated() {
+    List<Map<String, Object>> checks =
+        jdbc.queryForList(
+            """
+            SELECT conname, convalidated FROM pg_constraint
+            WHERE conrelid = 'risk.risk_rule_hits'::regclass AND contype = 'c'
+              AND pg_get_constraintdef(oid) LIKE '%rule_code%'
+            """);
+
+    assertThat(checks)
+        .extracting(row -> row.get("conname"))
+        .containsExactly("ck_risk_rule_hits_rule_code");
+    assertThat(checks).allSatisfy(row -> assertThat(row.get("convalidated")).isEqualTo(true));
+  }
+
   /** V11 replaced the outbox kind check in place: one check on the column, validated. */
   @Test
   void theOutboxHasExactlyOneValidatedKindCheck() {

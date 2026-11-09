@@ -1,33 +1,27 @@
 package com.portfolio.wallet.user.domain;
 
-import java.text.Normalizer;
-import java.util.regex.Pattern;
+import com.portfolio.wallet.common.text.InvalidTextException;
+import com.portfolio.wallet.common.text.TextRules;
 
 /**
- * The shared rule for free-text KYC fields: NFC, surrounding whitespace removed, not blank, at most
- * {@code max} characters (counted as PostgreSQL counts {@code varchar}, in code points), and no
- * control characters or lone surrogates, which could not be stored or would end as a 500, and no
- * format characters (zero-width characters and bidirectional marks, J6), which are invisible and
- * can make a text read differently from what it contains. Messages name the field, never the value.
+ * The shared rule for free-text KYC fields, applied by {@link TextRules} (documentations/06
+ * MVP-ADR-10): NFC, surrounding whitespace removed, not blank, at most {@code max} characters
+ * (counted as PostgreSQL counts {@code varchar}, in code points), and no control characters, lone
+ * surrogates or format characters (J6). The rules live in {@code common.text} since PR 5a step 3,
+ * so the transfer reviewer's reason (MVP-ADR-24 amendment Q10) applies the same implementation;
+ * this class keeps the name rule (P1, R2) and reports every failure as {@link
+ * InvalidKycDetailsException}. Messages name the field, never the value.
  */
 final class KycText {
-
-  private static final Pattern FORBIDDEN = Pattern.compile("[\\p{Cc}\\p{Cs}\\p{Cf}]");
-
-  /**
-   * As {@link #FORBIDDEN}, but zero-width non-joiner (U+200C) and joiner (U+200D) are allowed:
-   * names in Persian, several Indic scripts and others need them to be spelled correctly (owner,
-   * 2026-11-04, P1). Only names; every other field and every other format character stays refused.
-   */
-  private static final Pattern FORBIDDEN_IN_NAMES =
-      Pattern.compile("[\\p{Cc}\\p{Cs}\\p{Cf}&&[^\\u200C\\u200D]]");
-
-  private static final Pattern LETTER_OR_DIGIT = Pattern.compile("[\\p{L}\\p{N}]");
 
   private KycText() {}
 
   static String require(String field, String value, int max) {
-    return check(field, value, max, FORBIDDEN);
+    try {
+      return TextRules.require(field, value, max);
+    } catch (InvalidTextException e) {
+      throw new InvalidKycDetailsException(e.field(), e.rule());
+    }
   }
 
   /**
@@ -37,7 +31,12 @@ final class KycText {
    * the Basic Multilingual Plane count too.
    */
   static String requireName(String field, String value, int max) {
-    String checked = check(field, value, max, FORBIDDEN_IN_NAMES);
+    String checked;
+    try {
+      checked = TextRules.requireAllowingJoiners(field, value, max);
+    } catch (InvalidTextException e) {
+      throw new InvalidKycDetailsException(e.field(), e.rule());
+    }
     int[] codePoints = checked.codePoints().toArray();
     boolean letter = false;
     for (int i = 0; i < codePoints.length; i++) {
@@ -73,32 +72,15 @@ final class KycText {
         || type == Character.ENCLOSING_MARK;
   }
 
-  private static String check(String field, String value, int max, Pattern forbidden) {
-    if (value == null) {
-      throw new InvalidKycDetailsException(field, "must not be blank");
-    }
-    String normalised = Normalizer.normalize(value, Normalizer.Form.NFC).strip();
-    if (normalised.isEmpty()) {
-      throw new InvalidKycDetailsException(field, "must not be blank");
-    }
-    if (forbidden.matcher(normalised).find()) {
-      throw new InvalidKycDetailsException(field, "must not contain control or format characters");
-    }
-    if (normalised.codePointCount(0, normalised.length()) > max) {
-      throw new InvalidKycDetailsException(field, "must have at most " + max + " characters");
-    }
-    return normalised;
-  }
-
   /**
    * As {@link #require}, for a reason a person reads: it must also contain at least one letter or
    * digit, so punctuation or symbols alone are refused (J6).
    */
   static String requireReason(String field, String value, int max) {
-    String checked = require(field, value, max);
-    if (!LETTER_OR_DIGIT.matcher(checked).find()) {
-      throw new InvalidKycDetailsException(field, "must contain a letter or a digit");
+    try {
+      return TextRules.requireReason(field, value, max);
+    } catch (InvalidTextException e) {
+      throw new InvalidKycDetailsException(e.field(), e.rule());
     }
-    return checked;
   }
 }

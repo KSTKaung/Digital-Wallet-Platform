@@ -179,7 +179,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
   @ValueSource(
       strings = {
         "NEW_RECIPIENT",
-        "LARGE_AMOUNT",
+        "TRANSFER_AMOUNT",
         "review_declined",
         "REVIEW",
         "Suspicious",

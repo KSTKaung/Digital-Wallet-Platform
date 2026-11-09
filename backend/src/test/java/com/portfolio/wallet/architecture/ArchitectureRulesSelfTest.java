@@ -56,6 +56,19 @@ class ArchitectureRulesSelfTest {
   }
 
   @Test
+  void detectsTheRiskModuleDependingOnItsCallersOrCustomerModules() {
+    var result = ArchitectureRules.moneyCoreDependsDownwardOnly(FIXTURE_ROOT).evaluate(FIXTURES);
+
+    assertThat(result.getFailureReport().toString())
+        .contains(
+            "RiskCallerReader.transfers",
+            "RiskCallerReader.wallets",
+            "RiskCallerReader.admin",
+            "RiskCallerReader.auth",
+            "RiskCallerReader.users");
+  }
+
+  @Test
   void detectsAnApplicationApiExposingPersistence() {
     var result = ArchitectureRules.applicationApisHidePersistence().evaluate(FIXTURES);
 
@@ -102,6 +115,14 @@ class ArchitectureRulesSelfTest {
         .contains("ImmutableTransferRecord", "org.hibernate.annotations.Immutable");
   }
 
+  @Test
+  void detectsSpringInTheSharedTextRules() {
+    var result = ArchitectureRules.financialDomainIsFrameworkFree().evaluate(frameworkFixtures());
+
+    assertThat(result.getFailureReport().toString())
+        .contains("ComponentTextRule", "org.springframework.transaction.annotation.Transactional");
+  }
+
   private static JavaClasses frameworkFixtures() {
     return new ClassFileImporter().importPackages("com.portfolio.jpafixture");
   }
@@ -116,7 +137,9 @@ class ArchitectureRulesSelfTest {
                 "com.portfolio.wallet.common.money",
                 "com.portfolio.wallet.wallet.domain",
                 "com.portfolio.wallet.transfer.domain",
-                "com.portfolio.wallet.ledger.domain");
+                "com.portfolio.wallet.ledger.domain",
+                "com.portfolio.wallet.risk.domain",
+                "com.portfolio.wallet.common.text");
 
     var result = ArchitectureRules.financialDomainIsFrameworkFree().evaluate(production);
 
@@ -125,6 +148,8 @@ class ArchitectureRulesSelfTest {
     assertThat(production.contain("com.portfolio.wallet.transfer.domain.Transfer")).isTrue();
     assertThat(production.contain("com.portfolio.wallet.ledger.domain.FinancialTransaction"))
         .isTrue();
+    assertThat(production.contain("com.portfolio.wallet.risk.domain.ReviewOutcome")).isTrue();
+    assertThat(production.contain("com.portfolio.wallet.common.text.TextRules")).isTrue();
     assertThat(result.hasViolation()).as(result.getFailureReport().toString()).isFalse();
   }
 }
