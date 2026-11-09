@@ -1,5 +1,6 @@
 package com.portfolio.wallet.wallet.application;
 
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.idempotency.IdempotencyEngine;
@@ -23,7 +24,10 @@ import org.springframework.transaction.PlatformTransactionManager;
  * wallet.idempotency_records}, with the wallet's TTL ({@link IdempotencyProperties}) and the
  * wallet's stored rejections, {@link #STORED_REJECTIONS} (doc 06 MVP-ADR-06 "Transfers and one
  * engine": shared code, not shared records). This class adapts the wallet's request and response
- * types and adds the Q14 check of {@link #requireSameMovement}.
+ * types and adds the Q14 check of {@link #requireSameMovement}. Both transactions the engine opens
+ * start with {@link TransactionTimeouts#apply()} (doc 07 D14), so a wait for the idempotency row,
+ * the wallet or the usage row ends within the lock timeout as {@code 500 SYSTEM_ERROR}, and is not
+ * stored for the key.
  *
  * <p>Nothing here is logged: the key, the hash and the bodies stay out of the logs.
  */
@@ -49,7 +53,9 @@ public class IdempotencyService {
       IdempotencyRecordRepository records,
       IdempotencyProperties properties,
       Clock clock,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      TransactionTimeouts timeouts) {
+    Objects.requireNonNull(timeouts, "timeouts");
     this.engine =
         new IdempotencyEngine(
             records,
@@ -57,9 +63,9 @@ public class IdempotencyService {
             STORED_REJECTIONS,
             clock,
             transactionManager,
-            // No per-transaction settings yet: PR 5a step 4 sets the D14 lock and statement
-            // timeouts here (doc 06 "Lock and statement timeouts").
-            () -> {});
+            // D14: lock_timeout and statement_timeout, before the idempotency row is locked (doc 06
+            // "Lock and statement timeouts"; doc 08 §4C.2 Q6).
+            timeouts::apply);
   }
 
   /**

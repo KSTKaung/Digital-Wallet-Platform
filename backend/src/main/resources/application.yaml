@@ -90,6 +90,15 @@ logging:
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # Lock and statement timeouts (documentations/06 MVP-ADR-06 "Lock and statement timeouts"; doc 07
+  # D14; owner, 2026-11-06, initial MVP defaults). Set with SET LOCAL as the first statement of
+  # every money transaction (deposits, withdrawals, transfers), of the risk assessment and of the
+  # wallet lookup, so no wait is unbounded (doc 07 D14 open risk Z1). A timeout is 500 SYSTEM_ERROR
+  # and is never stored for an Idempotency-Key. Checked at startup: positive, whole milliseconds,
+  # at most 2147483647 ms, statement-timeout not shorter than lock-timeout.
+  database:
+    lock-timeout: 5s
+    statement-timeout: 10s
   # The business calendar of every module (documentations/06 MVP-ADR-22): "today" for the
   # date-of-birth check and the daily limits, and the zone in which emails state a time.
   business-zone: Asia/Bangkok

@@ -1,6 +1,7 @@
 package com.portfolio.wallet.risk.application;
 
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.risk.domain.RiskDecision;
@@ -34,8 +35,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * lock while money locks are taken (doc 07 §8). In that transaction, in this order:
  *
  * <ol>
- *   <li>the <b>transaction preparer</b> runs (no-op today; PR 5a step 4 wires the D14 {@code SET
- *       LOCAL lock_timeout} and {@code statement_timeout} into it, so they bound the lock wait);
+ *   <li>the <b>transaction preparer</b> runs: {@code TransactionTimeouts#apply()} sets the D14
+ *       {@code lock_timeout} and {@code statement_timeout} for this transaction, so they bound the
+ *       sender-lock wait; a timeout fails the assessment like any other failure;
  *   <li>the sender's {@code risk.sender_risk_state} row is created if absent and locked, as the
  *       first statement that touches data: concurrent assessments of one sender run one after
  *       another, so none can miss another's assessment in the frequency count;
@@ -61,7 +63,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code now()} minus the wallet's {@code created_at}, itself database time (V3). The application
  * {@code Clock} is not used. {@code now()} is the transaction start, before the sender-lock wait
  * and the insert, so at the window's edge a later assessment sees this one for the window minus
- * that wait: a skew bounded by the lock wait ({@code lock_timeout} once D14 lands in step 4), an
+ * that wait: a skew bounded by the lock wait (at most {@code lock_timeout}, doc 07 D14), an
  * accepted residual (see {@link RiskAssessmentRepository}).
  *
  * <h2>Failure (criterion 4)</h2>
@@ -109,16 +111,17 @@ public class RiskAssessmentService {
       RiskPolicy policy,
       RiskProperties properties,
       AuditService audit,
-      PlatformTransactionManager transactionManager) {
-    // No per-transaction settings yet: PR 5a step 4 sets the D14 lock and statement timeouts here
-    // (doc 06 "Lock and statement timeouts"; doc 08 §4C.2 Q6).
+      PlatformTransactionManager transactionManager,
+      TransactionTimeouts timeouts) {
+    // D14: lock_timeout and statement_timeout bound the sender-lock wait (doc 06 "Lock and
+    // statement timeouts"; doc 08 §4C.2 Q6).
     this(
         assessments,
         policy,
         properties.frequencyWindowSeconds(),
         audit,
         transactionManager,
-        () -> {});
+        Objects.requireNonNull(timeouts, "timeouts")::apply);
   }
 
   /**

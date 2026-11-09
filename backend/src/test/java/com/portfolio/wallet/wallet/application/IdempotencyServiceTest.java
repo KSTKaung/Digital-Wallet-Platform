@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.money.Money;
@@ -51,6 +52,7 @@ class IdempotencyServiceTest {
 
   private final IdempotencyRecordRepository records = mock(IdempotencyRecordRepository.class);
   private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+  private final TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
   private final AtomicInteger movements = new AtomicInteger();
 
   private IdempotencyService service;
@@ -64,7 +66,8 @@ class IdempotencyServiceTest {
             records,
             new IdempotencyProperties(TTL, new IdempotencyProperties.Purge(true, TTL, 10)),
             Clock.fixed(NOW, ZoneOffset.UTC),
-            transactions);
+            transactions,
+            timeouts);
     request = new IdempotentRequest(KEY, fingerprint("100.00"));
   }
 
@@ -114,6 +117,25 @@ class IdempotencyServiceTest {
   }
 
   // New key ------------------------------------------------------------------------------------
+
+  /** D14 (Q6): both engine transactions set the timeouts first, before the key is claimed. */
+  @Test
+  void theTimeoutsAreSetBeforeTheIdempotencyRowIsClaimedInBothTransactions() {
+    insertReturns(true, true);
+
+    assertThatThrownBy(() -> service.execute(request, rejecting(ErrorCode.WALLET_FROZEN)))
+        .isInstanceOf(ApiException.class);
+
+    InOrder order = inOrder(timeouts, records);
+    order.verify(timeouts).apply();
+    order
+        .verify(records)
+        .insertIfAbsent(any(), anyString(), any(), anyString(), any(), any(), any(), any(), any());
+    order.verify(timeouts).apply();
+    order
+        .verify(records)
+        .insertIfAbsent(any(), anyString(), any(), anyString(), any(), any(), any(), any(), any());
+  }
 
   @Test
   void newKeyRunsTheMovementAndStoresItsResponseInTheSameTransaction() {

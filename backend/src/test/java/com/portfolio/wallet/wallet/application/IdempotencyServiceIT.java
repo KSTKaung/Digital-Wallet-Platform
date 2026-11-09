@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.money.Money;
@@ -55,6 +56,7 @@ class IdempotencyServiceIT extends DatabaseIntegrationTest {
   private static final long TIMEOUT_SECONDS = 30;
 
   @Autowired PlatformTransactionManager transactionManager;
+  @Autowired TransactionTimeouts timeouts;
   @Autowired IdempotencyService contextService;
   @Autowired IdempotencyPurgeService contextPurge;
 
@@ -71,7 +73,7 @@ class IdempotencyServiceIT extends DatabaseIntegrationTest {
     IdempotencyProperties properties =
         new IdempotencyProperties(
             TTL, new IdempotencyProperties.Purge(false, Duration.ofHours(1), 2));
-    service = new IdempotencyService(records, properties, clock, transactionManager);
+    service = new IdempotencyService(records, properties, clock, transactionManager, timeouts);
     purge = new IdempotencyPurgeService(records, properties, clock);
     pool = Executors.newCachedThreadPool();
     customer = UUID.randomUUID();
@@ -464,7 +466,8 @@ class IdempotencyServiceIT extends DatabaseIntegrationTest {
         spied,
         new IdempotencyProperties(TTL, new IdempotencyProperties.Purge(false, TTL, 2)),
         clock,
-        transactionManager);
+        transactionManager,
+        timeouts);
   }
 
   // Expiry and purge ----------------------------------------------------------------------------

@@ -17,9 +17,9 @@ import org.springframework.stereotype.Repository;
  * every comparison are database time from the same clock. An assessment's time is its transaction's
  * start, which comes before its sender-lock wait and before its own insert; a later assessment
  * therefore sees it in the window for the window length minus that lock wait and pre-insert time.
- * This edge skew is bounded by the lock wait ({@code lock_timeout} once D14 is set in PR 5a step 4)
- * and is an accepted residual (step 3 review), not a guarantee that no assessment is ever missed at
- * the window's edge.
+ * This edge skew is bounded by the lock wait (at most {@code lock_timeout}, doc 07 D14) and is an
+ * accepted residual (step 3 review), not a guarantee that no assessment is ever missed at the
+ * window's edge.
  */
 @Repository
 public class RiskAssessmentRepository {

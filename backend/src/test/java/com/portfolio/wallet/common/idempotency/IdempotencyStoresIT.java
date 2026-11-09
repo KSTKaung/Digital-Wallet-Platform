@@ -3,6 +3,7 @@ package com.portfolio.wallet.common.idempotency;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.fingerprint.CanonicalForm;
@@ -88,6 +89,7 @@ class IdempotencyStoresIT extends DatabaseIntegrationTest {
           ErrorCode.WALLET_FROZEN);
 
   @Autowired PlatformTransactionManager transactionManager;
+  @Autowired TransactionTimeouts timeouts;
   @Autowired TransferIdempotency contextTransfers;
   @Autowired TransferIdempotencyPurgeService contextTransferPurge;
   @Autowired TransferIdempotencyProperties contextTransferProperties;
@@ -130,12 +132,14 @@ class IdempotencyStoresIT extends DatabaseIntegrationTest {
         new TransferIdempotencyProperties(
             TTL, new TransferIdempotencyProperties.Purge(false, Duration.ofHours(1), 2));
     transfers =
-        new TransferIdempotency(transferStore, transferProperties, clock, transactionManager);
+        new TransferIdempotency(
+            transferStore, transferProperties, clock, transactionManager, timeouts);
     transferPurge = new TransferIdempotencyPurgeService(transferStore, transferProperties, clock);
     IdempotencyProperties walletProperties =
         new IdempotencyProperties(
             TTL, new IdempotencyProperties.Purge(false, Duration.ofHours(1), 2));
-    deposits = new IdempotencyService(walletStore, walletProperties, clock, transactionManager);
+    deposits =
+        new IdempotencyService(walletStore, walletProperties, clock, transactionManager, timeouts);
     walletPurge = new IdempotencyPurgeService(walletStore, walletProperties, clock);
     walletEngine =
         new IdempotencyEngine(

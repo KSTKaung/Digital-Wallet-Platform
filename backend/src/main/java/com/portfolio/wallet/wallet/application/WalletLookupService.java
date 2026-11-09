@@ -4,6 +4,7 @@ import com.portfolio.wallet.audit.application.ActorType;
 import com.portfolio.wallet.audit.application.AuditEntry;
 import com.portfolio.wallet.audit.application.AuditResult;
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.error.RateLimitedException;
@@ -77,6 +78,7 @@ public class WalletLookupService {
   private final AuditService audit;
   private final LookupProperties properties;
   private final TransactionTemplate transactions;
+  private final TransactionTimeouts timeouts;
 
   public WalletLookupService(
       WalletRepository wallets,
@@ -84,13 +86,15 @@ public class WalletLookupService {
       RecipientNames names,
       AuditService audit,
       LookupProperties properties,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      TransactionTimeouts timeouts) {
     this.wallets = wallets;
     this.attempts = attempts;
     this.names = names;
     this.audit = audit;
     this.properties = properties;
     this.transactions = new TransactionTemplate(transactionManager);
+    this.timeouts = Objects.requireNonNull(timeouts, "timeouts");
   }
 
   /**
@@ -128,6 +132,8 @@ public class WalletLookupService {
   }
 
   private Outcome attempt(UUID callerId, String ipKey, InetAddress clientIp, String number) {
+    // D14 (doc 07 open risk Z1): bounds the advisory-lock waits below; first statement.
+    timeouts.apply();
     long window = properties.window().toSeconds();
     attempts.lockKeys(callerId, ipKey);
     WindowCount user = attempts.countForUser(callerId, window);

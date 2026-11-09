@@ -19,6 +19,7 @@ import com.portfolio.wallet.audit.application.ActorType;
 import com.portfolio.wallet.audit.application.AuditEntry;
 import com.portfolio.wallet.audit.application.AuditResult;
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.money.Money;
@@ -317,11 +318,17 @@ class RiskAssessmentServiceTest {
     RiskProperties properties = mock(RiskProperties.class);
     when(properties.frequencyWindowSeconds()).thenReturn(WINDOW);
     earlierAssessments(0);
+    TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
 
-    new RiskAssessmentService(repository, MvpRiskPolicy.create(), properties, audit, transactions)
+    new RiskAssessmentService(
+            repository, MvpRiskPolicy.create(), properties, audit, transactions, timeouts)
         .assess(request("100.00", OLD_WALLET, true));
 
     verify(repository).countInWindow(SENDER, WINDOW);
+    // D14 (Q6): the timeouts are the preparer, set before the sender lock.
+    org.mockito.InOrder order = org.mockito.Mockito.inOrder(timeouts, repository);
+    order.verify(timeouts).apply();
+    order.verify(repository).lockSender(SENDER);
   }
 
   @Test

@@ -1,5 +1,6 @@
 package com.portfolio.wallet.transfer.application;
 
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.idempotency.IdempotencyEngine;
@@ -56,7 +57,9 @@ public class TransferIdempotency {
       TransferIdempotencyRecordRepository records,
       TransferIdempotencyProperties properties,
       Clock clock,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      TransactionTimeouts timeouts) {
+    Objects.requireNonNull(timeouts, "timeouts");
     this.engine =
         new IdempotencyEngine(
             records,
@@ -64,9 +67,9 @@ public class TransferIdempotency {
             STORED_REJECTIONS,
             clock,
             transactionManager,
-            // No per-transaction settings yet: PR 5a step 4 sets the D14 lock and statement
-            // timeouts here (doc 06 "Lock and statement timeouts").
-            () -> {});
+            // D14: lock_timeout and statement_timeout, before the idempotency row is locked (doc 06
+            // "Lock and statement timeouts"; doc 08 §4C.2 Q6).
+            timeouts::apply);
   }
 
   /**
@@ -97,6 +100,39 @@ public class TransferIdempotency {
       Consumer<ApiException> onRefusalStored) {
     Objects.requireNonNull(request, "request");
     return engine.execute(request.toEngineRequest(), transfer, onRefusalStored);
+  }
+
+  /**
+   * Stores a business refusal found <b>outside</b> the engine for the request's key: the pre-check
+   * of Q3 step 5, before the risk assessment (doc 08 §5, step 2 notes). It goes through {@link
+   * #execute} with a transfer that only throws the refusal, so it is claimed, stored in its own
+   * transaction, audited by {@code onRefusalStored} and replayed exactly like a refusal found under
+   * the locks. A concurrent request with the same key may have committed first; its outcome wins.
+   *
+   * @param refusal the refusal; a code outside {@link #STORED_REJECTIONS} (validation, {@code
+   *     NOT_FOUND}, {@code SYSTEM_ERROR}, …) is rethrown as it is and nothing is stored
+   * @return only if an earlier request with the same key and body had succeeded: its replayed
+   *     response
+   * @throws ApiException the refusal (now stored), an earlier request's stored refusal, {@code
+   *     IDEMPOTENCY_KEY_REUSED}, or the refusal itself when its code is not stored
+   * @throws IllegalStateException if called inside a transaction
+   */
+  public IdempotentResult refuse(
+      TransferIdempotentRequest request,
+      ApiException refusal,
+      Consumer<ApiException> onRefusalStored) {
+    Objects.requireNonNull(request, "request");
+    Objects.requireNonNull(refusal, "refusal");
+    Objects.requireNonNull(onRefusalStored, "onRefusalStored");
+    if (!STORED_REJECTIONS.contains(refusal.errorCode())) {
+      throw refusal;
+    }
+    return execute(
+        request,
+        () -> {
+          throw refusal;
+        },
+        onRefusalStored);
   }
 
   /**

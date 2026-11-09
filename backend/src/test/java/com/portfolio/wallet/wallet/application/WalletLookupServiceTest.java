@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.portfolio.wallet.audit.application.AuditEntry;
 import com.portfolio.wallet.audit.application.AuditResult;
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.error.RateLimitedException;
@@ -50,6 +51,7 @@ class WalletLookupServiceTest {
   private final RecipientNames names = mock(RecipientNames.class);
   private final AuditService audit = mock(AuditService.class);
   private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+  private final TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
 
   private final WalletLookupService service =
       new WalletLookupService(
@@ -62,7 +64,8 @@ class WalletLookupServiceTest {
               30,
               Duration.ofMinutes(1),
               new LookupProperties.Purge(true, Duration.ofHours(1), 100)),
-          transactions);
+          transactions,
+          timeouts);
 
   private static WalletRow wallet(UUID id, UUID customer, String number, String status) {
     return new WalletRow(
@@ -117,6 +120,16 @@ class WalletLookupServiceTest {
     assertThat(entry.getValue().result()).isEqualTo(AuditResult.SUCCESS);
     assertThat(entry.getValue().resourceId()).isEqualTo(TARGET_WALLET.toString());
     assertThat(entry.getValue().newValue()).doesNotContainValue(TARGET_NUMBER);
+  }
+
+  /** Doc 07 D14 open risk Z1: the timeouts are set before the advisory locks are taken. */
+  @Test
+  void theTimeoutsAreSetBeforeTheAdvisoryLocks() {
+    service.lookup(CALLER, TARGET_NUMBER, IP);
+
+    InOrder order = inOrder(timeouts, attempts);
+    order.verify(timeouts).apply();
+    order.verify(attempts).lockKeys(CALLER, IP);
   }
 
   @Test

@@ -10,8 +10,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.idempotency.IdempotentResult;
@@ -55,6 +57,7 @@ class TransferIdempotencyTest {
   private final TransferIdempotencyRecordRepository records =
       mock(TransferIdempotencyRecordRepository.class);
   private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+  private final TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
   private final TransferIdempotencyProperties properties =
       new TransferIdempotencyProperties(
           TTL, new TransferIdempotencyProperties.Purge(true, Duration.ofHours(1), 2));
@@ -65,7 +68,7 @@ class TransferIdempotencyTest {
   @BeforeEach
   void setUp() {
     when(transactions.getTransaction(any())).thenAnswer(i -> new SimpleTransactionStatus());
-    idempotency = new TransferIdempotency(records, properties, CLOCK, transactions);
+    idempotency = new TransferIdempotency(records, properties, CLOCK, transactions, timeouts);
     request = new TransferIdempotentRequest(KEY, fingerprint("100.00"));
   }
 
@@ -80,6 +83,22 @@ class TransferIdempotencyTest {
     return () -> {
       throw new ApiException(code, "Rejected for test");
     };
+  }
+
+  /** D14 (Q6): the timeouts are set first in the money transaction, before the key is claimed. */
+  @Test
+  void theTimeoutsAreSetBeforeTheIdempotencyRowIsClaimed() {
+    when(records.insertIfAbsent(
+            any(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
+
+    idempotency.execute(request, () -> new StoredResponse(201, "{}"));
+
+    org.mockito.InOrder order = org.mockito.Mockito.inOrder(timeouts, records);
+    order.verify(timeouts).apply();
+    order
+        .verify(records)
+        .insertIfAbsent(any(), anyString(), any(), anyString(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -144,6 +163,59 @@ class TransferIdempotencyTest {
             eq("Rejected for test"),
             eq(NOW),
             eq(NOW.plus(TTL)));
+  }
+
+  /** Code review 2 (doc 08 §5): a pre-check refusal is stored through the engine like any other. */
+  @Test
+  void aPrecheckRefusalIsStoredForTheKeyWithItsHook() {
+    when(records.insertIfAbsent(
+            any(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
+        .thenReturn(true);
+    List<ErrorCode> hooked = new ArrayList<>();
+    ApiException refusal =
+        new ApiException(ErrorCode.INSUFFICIENT_BALANCE, "Available balance is lower");
+
+    assertThatThrownBy(() -> idempotency.refuse(request, refusal, e -> hooked.add(e.errorCode())))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            e -> {
+              assertThat(e.errorCode()).isEqualTo(ErrorCode.INSUFFICIENT_BALANCE);
+              assertThat(e.getMessage()).isEqualTo("Available balance is lower");
+            });
+
+    assertThat(hooked).containsExactly(ErrorCode.INSUFFICIENT_BALANCE);
+    verify(records)
+        .insertIfAbsent(
+            eq(SENDER),
+            eq("TRANSFER"),
+            eq(KEY),
+            anyString(),
+            eq(409),
+            eq("INSUFFICIENT_BALANCE"),
+            eq("Available balance is lower"),
+            eq(NOW),
+            eq(NOW.plus(TTL)));
+  }
+
+  @Test
+  void aRefusalWhoseCodeIsNotStoredIsRethrownWithoutTouchingTheRecords() {
+    for (ErrorCode code :
+        new ErrorCode[] {ErrorCode.INVALID_AMOUNT, ErrorCode.SYSTEM_ERROR, ErrorCode.NOT_FOUND}) {
+      ApiException refusal = new ApiException(code, "Not stored");
+
+      assertThatThrownBy(() -> idempotency.refuse(request, refusal, e -> {})).isSameAs(refusal);
+    }
+    verifyNoInteractions(records);
+    verifyNoInteractions(timeouts);
+    assertThatThrownBy(() -> idempotency.refuse(null, null, e -> {}))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> idempotency.refuse(request, null, e -> {}))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () ->
+                idempotency.refuse(
+                    request, new ApiException(ErrorCode.WALLET_FROZEN, "frozen"), null))
+        .isInstanceOf(NullPointerException.class);
   }
 
   @Test

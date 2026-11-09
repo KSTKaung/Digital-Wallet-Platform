@@ -2,6 +2,7 @@ package com.portfolio.wallet.wallet.application;
 
 import com.portfolio.wallet.audit.application.ActorType;
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.ledger.application.LedgerAccountService;
@@ -31,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  * SHARE}, V2's entry trigger) second, so the two serialise and cannot deadlock, and a posting that
  * comes after a freeze finds the account {@code FROZEN} and is refused. The wallet's status, its
  * {@code version}, the account's status, the audit row and the email's outbox row commit together
- * or not at all.
+ * or not at all. The D14 lock and statement timeouts are set before the first lock (owner,
+ * 2026-11-09), so a stuck holder ends the change with {@code 500} instead of an unbounded wait.
  *
  * <p>Repeating a change is idempotent: freezing a {@code FROZEN} wallet or unfreezing an {@code
  * ACTIVE} one returns the current status, changes nothing and writes no audit or outbox row. The
@@ -56,16 +58,19 @@ public class WalletStatusService {
   private final LedgerAccountService ledgerAccounts;
   private final AuditService audit;
   private final NotificationOutbox outbox;
+  private final TransactionTimeouts timeouts;
 
   public WalletStatusService(
       WalletRepository wallets,
       LedgerAccountService ledgerAccounts,
       AuditService audit,
-      NotificationOutbox outbox) {
+      NotificationOutbox outbox,
+      TransactionTimeouts timeouts) {
     this.wallets = wallets;
     this.ledgerAccounts = ledgerAccounts;
     this.audit = audit;
     this.outbox = outbox;
+    this.timeouts = Objects.requireNonNull(timeouts, "timeouts");
   }
 
   /**
@@ -128,6 +133,8 @@ public class WalletStatusService {
       Supplier<ApiException> missing) {
     Objects.requireNonNull(customerId, "customerId");
     Objects.requireNonNull(actorId, "actorId");
+    // D14 timeouts before the first lock (owner, 2026-11-09): same locks as a money flow.
+    timeouts.apply();
     WalletRow row = wallets.findByCustomerForUpdate(customerId).orElseThrow(missing);
     Wallet wallet = WalletRows.toDomain(row);
     if (wallet.status() == change.target) {
