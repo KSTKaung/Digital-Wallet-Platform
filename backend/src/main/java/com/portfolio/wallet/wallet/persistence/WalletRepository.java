@@ -3,6 +3,7 @@ package com.portfolio.wallet.wallet.persistence;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,6 +78,19 @@ public class WalletRepository {
   /** The wallet with exactly this number ({@code uq_wallets_wallet_number}), as committed now. */
   public Optional<WalletRow> findByWalletNumber(String walletNumber) {
     return find("wallet_number = :value", walletNumber, "");
+  }
+
+  /**
+   * The wallets with these ids, as committed now, in no particular order; missing ids are left out.
+   */
+  public List<WalletRow> findByIds(Collection<UUID> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    return jdbc.sql(SELECT + "id IN (:ids)")
+        .param("ids", List.copyOf(ids))
+        .query(WalletRepository::map)
+        .list();
   }
 
   /** The customer's wallet ({@code uq_wallets_customer}: at most one), as committed now. */

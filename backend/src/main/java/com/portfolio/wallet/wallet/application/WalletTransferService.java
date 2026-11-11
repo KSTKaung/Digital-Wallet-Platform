@@ -164,6 +164,22 @@ public class WalletTransferService {
     return new TransferPrecheck(LockedTransferWallets.view(row), today);
   }
 
+  /**
+   * The customer's wallet id as committed now, for the audit row of a pre-check refusal, which has
+   * no {@link TransferPrecheck}. Outside any transaction and without a lock.
+   *
+   * @throws ApiException {@code KYC_REQUIRED} if the customer has no wallet
+   */
+  @Transactional(propagation = Propagation.NEVER)
+  public UUID walletIdOf(UUID customerId) {
+    Objects.requireNonNull(customerId, "customerId");
+    return wallets
+        .findByCustomer(customerId)
+        .map(WalletRow::id)
+        .orElseThrow(
+            () -> new ApiException(ErrorCode.KYC_REQUIRED, MoneyMovementService.KYC_REQUIRED));
+  }
+
   // The money transaction ------------------------------------------------------------------------
 
   /**

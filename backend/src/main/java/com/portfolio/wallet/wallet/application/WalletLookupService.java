@@ -58,6 +58,30 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * The client IP is the container's remote address, which takes {@code X-Forwarded-For} only from
  * trusted proxies (MVP-ADR-20); an IPv6 address counts per /64, as in the in-memory limiter.
+ *
+ * <h2>Transfers count as lookups (Q5)</h2>
+ *
+ * {@link #resolveTransferRecipient} is the recipient step of {@code POST /transfers} (doc 08 §4C.2
+ * Q3 step 3, Q5; doc 06 MVP-ADR-20 amendment "Transfers count as lookups"; doc 02 §1.8). It runs in
+ * the <b>same transaction</b> as {@link #lookup}: the same advisory locks and the same per-user and
+ * per-IP windows (Y1 clock), so the transfer endpoint is not a way around the lookup limit:
+ *
+ * <ul>
+ *   <li><b>the limit applies to every resolution</b>: a caller over either window gets {@code 429}
+ *       with {@code Retry-After} whether the recipient exists or not, so the answer never tells
+ *       which (MVP-ADR-20); the refused request is neither counted nor audited;
+ *   <li><b>only a recipient that is not found counts</b> (a wrong check digit, a missing, frozen or
+ *       closed wallet): its attempt row and its {@code WALLET_LOOKUP} {@code FAILURE} audit row are
+ *       written, then the identical {@code 404};
+ *   <li>a found recipient, another customer's {@code ACTIVE} wallet or the caller's own ({@code 409
+ *       SELF_TRANSFER}, after the 404 cases), is neither counted nor audited as a lookup; the
+ *       transfer's own audit rows cover it;
+ *   <li>the caller needs a wallet ({@code 403 KYC_REQUIRED}), but a frozen sender is not refused
+ *       here: {@code WALLET_FROZEN} of the sender is a stored refusal of the pre-check (Q3 step 5).
+ * </ul>
+ *
+ * A recipient found here but frozen or closed under the money transaction's lock gets the identical
+ * {@code 404} and is not counted (owner, 2026-11-09, doc 08 §5).
  */
 @Service
 public class WalletLookupService {
@@ -65,6 +89,8 @@ public class WalletLookupService {
   static final String KYC_REQUIRED = "KYC approval is required before looking up a wallet";
   static final String FROZEN = "Wallet is frozen";
   static final String INVALID_NUMBER = "walletNumber: must be 11 digits";
+  static final String INVALID_RECIPIENT = "receiverWalletNumber: must be 11 digits";
+  static final String SELF_TRANSFER = "Cannot transfer to your own wallet";
   static final String LOOKUP = "WALLET_LOOKUP";
   static final String WALLET = "WALLET";
 
@@ -120,6 +146,46 @@ public class WalletLookupService {
       // CLOSED is unreachable in the MVP (doc 07 D21).
       throw new IllegalStateException("caller wallet is neither active nor frozen");
     }
+    return counted(callerId, walletNumber, remoteAddress, Purpose.LOOKUP).view();
+  }
+
+  /**
+   * The recipient step of {@code POST /transfers} (Q3 steps 2 and 3, Q5): limited like {@link
+   * #lookup}, counted and audited only when the recipient is not found; see the class
+   * documentation.
+   *
+   * @param callerId the sender, the JWT subject
+   * @param walletNumber the request's {@code receiverWalletNumber}, already format-checked by the
+   *     web layer; checked again here
+   * @param remoteAddress the container's remote address of the request
+   * @return the recipient's wallet and customer ids and its masked name and number
+   * @throws ApiException {@code VALIDATION_ERROR} (format; not counted), {@code KYC_REQUIRED} (no
+   *     sender wallet; not counted), the identical {@code NOT_FOUND} (counted and audited) or
+   *     {@code SELF_TRANSFER} (not counted, not audited as a lookup)
+   * @throws RateLimitedException over a lookup limit (neither counted nor audited)
+   */
+  public TransferRecipient resolveTransferRecipient(
+      UUID callerId, String walletNumber, String remoteAddress) {
+    Objects.requireNonNull(callerId, "callerId");
+    if (!WalletNumber.hasValidFormat(walletNumber)) {
+      throw new ApiException(ErrorCode.VALIDATION_ERROR, INVALID_RECIPIENT);
+    }
+    // Q3 step 2: no wallet means no KYC approval (MVP-ADR-10); checked before anything is counted.
+    // A frozen sender is refused by the pre-check (step 5), where WALLET_FROZEN is stored.
+    if (wallets.findByCustomer(callerId).isEmpty()) {
+      throw new ApiException(ErrorCode.KYC_REQUIRED, MoneyMovementService.KYC_REQUIRED);
+    }
+    Outcome.Found found = counted(callerId, walletNumber, remoteAddress, Purpose.TRANSFER);
+    return new TransferRecipient(
+        found.walletId(),
+        found.customerId(),
+        found.view().maskedName(),
+        found.view().maskedWalletNumber());
+  }
+
+  /** The counted transaction shared by the lookup and the transfer's recipient step. */
+  private Outcome.Found counted(
+      UUID callerId, String walletNumber, String remoteAddress, Purpose purpose) {
     InetAddress clientIp = ClientAddresses.parse(remoteAddress);
     if (clientIp == null) {
       throw new IllegalStateException("remote address is not an IP literal");
@@ -127,11 +193,13 @@ public class WalletLookupService {
     String ipKey = ipKey(clientIp);
     Outcome outcome =
         Objects.requireNonNull(
-            transactions.execute(status -> attempt(callerId, ipKey, clientIp, walletNumber)));
+            transactions.execute(
+                status -> attempt(callerId, ipKey, clientIp, walletNumber, purpose)));
     return outcome.result();
   }
 
-  private Outcome attempt(UUID callerId, String ipKey, InetAddress clientIp, String number) {
+  private Outcome attempt(
+      UUID callerId, String ipKey, InetAddress clientIp, String number, Purpose purpose) {
     // D14 (doc 07 open risk Z1): bounds the advisory-lock waits below; first statement.
     timeouts.apply();
     long window = properties.window().toSeconds();
@@ -149,29 +217,53 @@ public class WalletLookupService {
       log.warn("Refused a wallet lookup by the rate limit: user={}, ip={}", userLimited, ipLimited);
       return new Outcome.Limited(wait);
     }
-    attempts.insert(callerId, ipKey);
+    boolean lookup = purpose == Purpose.LOOKUP;
+    if (lookup) {
+      // A lookup counts whatever it finds (MVP-ADR-20).
+      attempts.insert(callerId, ipKey);
+    }
 
-    // Second validation step (X2): a wrong check digit cannot be a wallet. It is counted and
-    // audited like any miss, with no wallet query, and gives the same 404.
-    Optional<WalletRow> target =
+    // Second validation step (X2): a wrong check digit cannot be a wallet. It is a miss without a
+    // wallet query, counted and audited like any other, and gives the same 404.
+    Optional<WalletRow> active =
         !WalletNumber.hasValidCheckDigit(number)
             ? Optional.empty()
             : wallets
                 .findByWalletNumber(number)
-                .filter(row -> WalletStatus.valueOf(row.status()) == WalletStatus.ACTIVE)
-                .filter(row -> !row.customerId().equals(callerId));
+                .filter(row -> WalletStatus.valueOf(row.status()) == WalletStatus.ACTIVE);
+    if (!lookup && active.isPresent() && active.get().customerId().equals(callerId)) {
+      // Q3 step 3: the sender's own wallet, after the 404 cases. Found, so neither counted nor
+      // audited as a lookup (Q5); the transfer's own audit covers the request.
+      return Outcome.Self.INSTANCE;
+    }
+    Optional<WalletRow> target = active.filter(row -> !row.customerId().equals(callerId));
     Optional<String> name = target.flatMap(row -> names.maskedLegalName(row.customerId()));
     if (target.isPresent() && name.isEmpty()) {
       // An approved wallet always has a legal name (V8); answer like any other miss.
       log.warn("Wallet lookup target has no legal name");
     }
     if (name.isEmpty()) {
+      if (!lookup) {
+        // Q5: only a transfer whose recipient is not found counts in the lookup windows. Inserted
+        // by a statement after the locks and the window counts, so its stamp keeps Y1.
+        attempts.insert(callerId, ipKey);
+      }
       audit.record(entry(callerId, clientIp, AuditResult.FAILURE, null, "NOT_FOUND"));
       return Outcome.NotFound.INSTANCE;
     }
+    if (!lookup) {
+      // A found recipient of a transfer: not counted, not audited as a lookup (Q5).
+      return new Outcome.Found(
+          new WalletLookupView(name.get(), masked(number)),
+          target.get().id(),
+          target.get().customerId());
+    }
     audit.record(
         entry(callerId, clientIp, AuditResult.SUCCESS, target.get().id().toString(), "FOUND"));
-    return new Outcome.Found(new WalletLookupView(name.get(), masked(number)));
+    return new Outcome.Found(
+        new WalletLookupView(name.get(), masked(number)),
+        target.get().id(),
+        target.get().customerId());
   }
 
   /** Only the last 4 digits visible (MVP-ADR-20), the length kept: {@code *******8901}. */
@@ -204,21 +296,27 @@ public class WalletLookupService {
         .withNewValue(Map.of("outcome", outcome));
   }
 
+  /** Which endpoint resolves the number: the lookup itself, or {@code POST /transfers} (Q5). */
+  private enum Purpose {
+    LOOKUP,
+    TRANSFER
+  }
+
   /** Turned into a response or an exception only after the commit, so the attempt stays. */
   private sealed interface Outcome {
 
-    WalletLookupView result();
+    Found result();
 
-    record Found(WalletLookupView view) implements Outcome {
+    record Found(WalletLookupView view, UUID walletId, UUID customerId) implements Outcome {
       @Override
-      public WalletLookupView result() {
-        return view;
+      public Found result() {
+        return this;
       }
     }
 
     record Limited(long retryAfterSeconds) implements Outcome {
       @Override
-      public WalletLookupView result() {
+      public Found result() {
         throw new RateLimitedException(retryAfterSeconds);
       }
     }
@@ -227,8 +325,17 @@ public class WalletLookupService {
       INSTANCE;
 
       @Override
-      public WalletLookupView result() {
+      public Found result() {
         throw ApiException.notFound();
+      }
+    }
+
+    enum Self implements Outcome {
+      INSTANCE;
+
+      @Override
+      public Found result() {
+        throw new ApiException(ErrorCode.SELF_TRANSFER, SELF_TRANSFER);
       }
     }
   }

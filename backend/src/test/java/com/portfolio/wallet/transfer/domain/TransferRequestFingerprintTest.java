@@ -96,6 +96,26 @@ class TransferRequestFingerprintTest {
         .isNotEqualTo(base);
   }
 
+  /**
+   * Owner, 2026-11-11: omitted and {@code null} are one request; {@code ""} is another; spaces are
+   * part of the value (no trimming), so {@code " rent "} is not {@code "rent"}.
+   */
+  @Test
+  void descriptionAbsenceEmptinessAndSpacesAreDistinct() {
+    String none =
+        TransferRequestFingerprint.builder(
+                SENDER, RECEIVER, Money.of(new BigDecimal("10"), Money.THB))
+            .build()
+            .sha256Hex();
+
+    assertThat(transfer(RECEIVER, "10", null).sha256Hex()).isEqualTo(none);
+    assertThat(transfer(RECEIVER, "10", "").sha256Hex()).isNotEqualTo(none);
+    assertThat(transfer(RECEIVER, "10", " rent ").sha256Hex())
+        .isNotEqualTo(transfer(RECEIVER, "10", "rent").sha256Hex());
+    assertThat(transfer(RECEIVER, "10", " rent ").canonicalForm())
+        .endsWith("description=6: rent \n");
+  }
+
   @Test
   void aDescriptionCannotSpoofTheWalletNumber() {
     // Length prefixes keep the two text fields apart.

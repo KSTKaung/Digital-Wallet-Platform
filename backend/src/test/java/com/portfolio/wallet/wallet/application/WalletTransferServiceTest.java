@@ -746,4 +746,18 @@ class WalletTransferServiceTest {
     assertThatThrownBy(() -> new TransferPrecheck(null, DAY))
         .isInstanceOf(NullPointerException.class);
   }
+
+  // walletIdOf (PR 5a step 5: the audit row of a pre-check refusal) ---------------------------
+
+  @Test
+  void walletIdOfNamesTheCustomersWalletOrRefusesWithoutOne() {
+    when(wallets.findByCustomer(SENDER_CUSTOMER))
+        .thenReturn(Optional.of(sender("FROZEN", "0.00", "0.00")));
+    when(wallets.findByCustomer(RECIPIENT_CUSTOMER)).thenReturn(Optional.empty());
+
+    assertThat(service.walletIdOf(SENDER_CUSTOMER)).isEqualTo(SENDER);
+    assertThatThrownBy(() -> service.walletIdOf(RECIPIENT_CUSTOMER))
+        .isInstanceOfSatisfying(
+            ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.KYC_REQUIRED));
+  }
 }

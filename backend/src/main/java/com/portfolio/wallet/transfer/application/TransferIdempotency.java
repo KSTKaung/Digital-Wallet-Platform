@@ -6,6 +6,7 @@ import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.idempotency.IdempotencyEngine;
 import com.portfolio.wallet.common.idempotency.IdempotentResult;
 import com.portfolio.wallet.common.idempotency.StoredResponse;
+import com.portfolio.wallet.transfer.domain.TransferIdentity;
 import com.portfolio.wallet.transfer.persistence.TransferIdempotencyRecordRepository;
 import java.time.Clock;
 import java.util.EnumSet;
@@ -32,6 +33,11 @@ import org.springframework.transaction.PlatformTransactionManager;
  * pre-check and the risk assessment; then {@link #execute} runs the money transaction, the
  * authority under the row lock. {@code SYSTEM_ERROR} (a risk failure, a lock or statement timeout,
  * Q6) and every code outside the set are never stored, so a retry with the same key runs fresh.
+ *
+ * <p>After the record expires or is purged, the transfer row with the same {@code (sender, key)}
+ * remains the key's guard ({@link #requireSameTransfer}; Q14 applied to transfers, owner
+ * 2026-11-11): the caller checks it right after {@link #replayIfCompleted} and again inside each
+ * transaction this engine opens, before anything is written.
  *
  * <p>Nothing here is logged: the key, the hash and the bodies stay out of the logs.
  */
@@ -152,5 +158,20 @@ public class TransferIdempotency {
   /** The business rejections that are stored and replayed for transfers. */
   public Set<ErrorCode> storedRejections() {
     return engine.storedRejections();
+  }
+
+  /**
+   * The Q14 check for transfers (doc 08 §4B.2 Q14; owner, 2026-11-11, option a), as {@code
+   * IdempotencyService.requireSameMovement} is for deposits and withdrawals: when the key's record
+   * no longer counts (expired or purged) but a transfer row with the same {@code (sender, key)}
+   * exists, the request may have that transfer's response only if it is the same transfer.
+   *
+   * @throws ApiException {@code 409 IDEMPOTENCY_KEY_REUSED} unless sender, sender wallet, recipient
+   *     wallet, amount and currency all match
+   */
+  public static void requireSameTransfer(TransferIdentity requested, TransferIdentity stored) {
+    if (!requested.isSameTransferAs(stored)) {
+      throw IdempotencyEngine.keyReused();
+    }
   }
 }

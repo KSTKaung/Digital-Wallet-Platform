@@ -154,6 +154,12 @@ app:
         interval: 1h
         batch-size: 500
   transfer:
+    # Manual review of a held transfer (documentations/06 MVP-ADR-24 "Expiry"; owner, 2026-10-30,
+    # doc 07 D28): a PENDING_REVIEW transfer expires this long after it was held. The database sets
+    # held_at and computes review_expires_at = held_at + duration in the same statement. Whole
+    # seconds, at least 1s; checked at startup.
+    review:
+      duration: 24h
     # Idempotency-Key records of transfers (documentations/02 §1.4; doc 06 MVP-ADR-06; doc 07 D04),
     # in the transfer module's own table, apart from the wallet's records.
     idempotency:
@@ -243,7 +249,10 @@ app:
   rate-limit:
     auth-requests-per-minute-per-ip: 10
     other-requests-per-minute-per-user: 300
-    # Deposits and withdrawals (transfers in PR 5), per customer (doc 02 §1.8).
+    # Money POSTs per customer (doc 02 §1.8): POST /wallet/deposits, POST /wallet/withdrawals and
+    # POST /transfers. POST /transfers/{id}/cancel and the transfer-review actions are not money
+    # POSTs: they count only toward other-requests-per-minute-per-user (owner, 2026-11-06, Q15;
+    # doc 06 MVP-ADR-24 amendment "Rate limit (Q15)"). Paths in common.security.SecurityConfig.
     money-requests-per-minute-per-customer: 30
     # Memory bound per limiter; not a documented value.
     max-tracked-keys: 100000

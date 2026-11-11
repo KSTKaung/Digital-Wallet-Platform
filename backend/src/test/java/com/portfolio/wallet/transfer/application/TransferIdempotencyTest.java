@@ -354,6 +354,36 @@ class TransferIdempotencyTest {
   }
 
   @Test
+  void afterTheRecordTheTransferMustBeTheSameOrTheKeyIsReused() {
+    UUID senderWallet = UUID.randomUUID();
+    UUID receiverWallet = UUID.randomUUID();
+    com.portfolio.wallet.transfer.domain.TransferIdentity stored =
+        new com.portfolio.wallet.transfer.domain.TransferIdentity(
+            SENDER, senderWallet, receiverWallet, Money.of("100.00", Money.THB));
+
+    assertThatCode(
+            () ->
+                TransferIdempotency.requireSameTransfer(
+                    new com.portfolio.wallet.transfer.domain.TransferIdentity(
+                        SENDER, senderWallet, receiverWallet, Money.of("100", Money.THB)),
+                    stored))
+        .doesNotThrowAnyException();
+    assertThatThrownBy(
+            () ->
+                TransferIdempotency.requireSameTransfer(
+                    new com.portfolio.wallet.transfer.domain.TransferIdentity(
+                        SENDER, senderWallet, UUID.randomUUID(), Money.of("100.00", Money.THB)),
+                    stored))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            e -> {
+              assertThat(e.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED);
+              assertThat(e.getMessage())
+                  .isEqualTo("Idempotency-Key was already used for a different request");
+            });
+  }
+
+  @Test
   void theScheduledJobDelegatesToThePurge() {
     TransferIdempotencyPurgeService purge = mock(TransferIdempotencyPurgeService.class);
 

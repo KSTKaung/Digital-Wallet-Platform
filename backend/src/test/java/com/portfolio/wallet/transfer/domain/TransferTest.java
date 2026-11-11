@@ -172,6 +172,23 @@ class TransferTest {
         .hasMessage("description is longer than 140 characters");
   }
 
+  /**
+   * The limit counts code points, as PostgreSQL {@code varchar(140)} does (owner, 2026-11-11): not
+   * UTF-16 units and not grapheme clusters.
+   */
+  @Test
+  void descriptionLengthCountsCodePoints() {
+    String grin = "😀"; // U+1F600, two UTF-16 units
+    String thaiFlag = "🇹🇭"; // U+1F1F9 U+1F1ED: one grapheme, two code points
+
+    assertThat(details("1.00", grin.repeat(140)).description()).hasSize(280);
+    assertThatThrownBy(() -> details("1.00", grin.repeat(141)))
+        .isInstanceOf(InvalidTransferDetailsException.class);
+    assertThat(details("1.00", thaiFlag.repeat(70)).description()).isEqualTo(thaiFlag.repeat(70));
+    assertThatThrownBy(() -> details("1.00", thaiFlag.repeat(70) + "a"))
+        .isInstanceOf(InvalidTransferDetailsException.class);
+  }
+
   @Test
   void descriptionIsNeverInToString() {
     TransferDetails details = details("1.00", "secret note");
@@ -199,10 +216,10 @@ class TransferTest {
   void rejectBeforeTheDeadlineStoresTheCategory() {
     Transfer transfer = held();
 
-    transfer.reject(HELD_AT.plusSeconds(60), "RISK_REVIEW");
+    transfer.reject(HELD_AT.plusSeconds(60), RejectionCategory.REVIEW_DECLINED);
 
     assertThat(transfer.status()).isEqualTo(TransferStatus.REJECTED);
-    assertThat(transfer.rejectionReasonCategory()).contains("RISK_REVIEW");
+    assertThat(transfer.rejectionReasonCategory()).contains(RejectionCategory.REVIEW_DECLINED);
     assertThat(transfer.decidedAt()).contains(HELD_AT.plusSeconds(60));
     assertThat(transfer.isLedgerPosted()).isFalse();
   }
@@ -211,11 +228,48 @@ class TransferTest {
   void rejectNeedsACategory() {
     Transfer transfer = held();
 
-    assertThatThrownBy(() -> transfer.reject(HELD_AT, " "))
-        .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> transfer.reject(HELD_AT, "x".repeat(41)))
-        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> transfer.reject(HELD_AT, null))
+        .isInstanceOf(NullPointerException.class);
     assertThat(transfer.status()).isEqualTo(TransferStatus.PENDING_REVIEW);
+  }
+
+  /** The two customer categories of Q10, and nothing else, as V11 allows (doc 08 §5). */
+  @Test
+  void rejectionCategoriesAreTheTwoCustomerValues() {
+    assertThat(RejectionCategory.values())
+        .extracting(Enum::name)
+        .containsExactly("REVIEW_DECLINED", "WALLET_UNAVAILABLE");
+  }
+
+  @Test
+  void restoreRequiresACategoryExactlyForRejected() {
+    assertThatThrownBy(
+            () ->
+                Transfer.restore(
+                    details(), TransferStatus.REJECTED, HELD_AT, DEADLINE, HELD_AT, null, 1))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () ->
+                Transfer.restore(
+                    details(),
+                    TransferStatus.CANCELLED,
+                    HELD_AT,
+                    DEADLINE,
+                    HELD_AT,
+                    RejectionCategory.REVIEW_DECLINED,
+                    1))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(
+            Transfer.restore(
+                    details(),
+                    TransferStatus.REJECTED,
+                    HELD_AT,
+                    DEADLINE,
+                    HELD_AT,
+                    RejectionCategory.WALLET_UNAVAILABLE,
+                    1)
+                .rejectionReasonCategory())
+        .contains(RejectionCategory.WALLET_UNAVAILABLE);
   }
 
   @Test
@@ -322,7 +376,9 @@ class TransferTest {
     return Stream.of(
         Arguments.of("approve", (BiConsumer<Transfer, Instant>) Transfer::approve),
         Arguments.of(
-            "reject", (BiConsumer<Transfer, Instant>) (t, now) -> t.reject(now, "RISK_REVIEW")),
+            "reject",
+            (BiConsumer<Transfer, Instant>)
+                (t, now) -> t.reject(now, RejectionCategory.WALLET_UNAVAILABLE)),
         Arguments.of("cancel", (BiConsumer<Transfer, Instant>) Transfer::cancel));
   }
 
@@ -342,7 +398,7 @@ class TransferTest {
     Transfer transfer = held();
     switch (status) {
       case COMPLETED -> transfer.approve(HELD_AT);
-      case REJECTED -> transfer.reject(HELD_AT, "RISK_REVIEW");
+      case REJECTED -> transfer.reject(HELD_AT, RejectionCategory.WALLET_UNAVAILABLE);
       case CANCELLED -> transfer.cancel(HELD_AT);
       case EXPIRED -> transfer.expire(DEADLINE);
       case BLOCKED -> transfer = Transfer.blocked(details());
