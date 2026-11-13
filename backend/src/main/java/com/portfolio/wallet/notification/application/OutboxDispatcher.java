@@ -70,6 +70,9 @@ public class OutboxDispatcher {
   /** The recorded failure for a stored kind this build does not know. */
   static final String UNKNOWN_KIND = "UnknownKind";
 
+  /** The recorded failure for stored template values that are not an object of strings. */
+  static final String UNREADABLE_VALUES = "UnreadableValues";
+
   /** The size of {@code notification.notifications.last_failure} (V9). */
   static final int MAX_FAILURE_LENGTH = 100;
 
@@ -199,6 +202,9 @@ public class OutboxDispatcher {
     } catch (IllegalArgumentException e) {
       return UNKNOWN_KIND;
     }
+    if (row.values() == null) {
+      return UNREADABLE_VALUES;
+    }
     try {
       Optional<String> address =
           recipients.emailOf(row.userId(), properties.addressLookupTimeout());
@@ -207,7 +213,7 @@ public class OutboxDispatcher {
       }
       sender.send(
           OutboxTemplates.render(
-              kind, address.get(), row.occurredAt(), businessTime.businessZone()));
+              kind, address.get(), row.occurredAt(), businessTime.businessZone(), row.values()));
       return null;
     } catch (RuntimeException e) {
       return e.getClass().getSimpleName();

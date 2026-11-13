@@ -51,7 +51,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       deadline crossed between step 2 and this statement) is {@code 409 INVALID_TRANSFER_STATE},
  *       and the caller's transaction rolls back, the release included;
  *   <li>the risk review row ({@link RiskReviewService}), then the audit row with the same five
- *       facts, in the same transaction.
+ *       facts, then the sender's email ({@code TRANSFER_CANCELLED} or {@code TRANSFER_EXPIRED},
+ *       {@link TransferEmails}), all in the same transaction.
  * </ol>
  */
 @Component
@@ -99,16 +100,19 @@ class HeldTransferDecider {
   private final WalletTransferService wallets;
   private final RiskReviewService reviews;
   private final AuditService audit;
+  private final TransferEmails emails;
 
   HeldTransferDecider(
       TransferRepository transfers,
       WalletTransferService wallets,
       RiskReviewService reviews,
-      AuditService audit) {
+      AuditService audit,
+      TransferEmails emails) {
     this.transfers = Objects.requireNonNull(transfers, "transfers");
     this.wallets = Objects.requireNonNull(wallets, "wallets");
     this.reviews = Objects.requireNonNull(reviews, "reviews");
     this.audit = Objects.requireNonNull(audit, "audit");
+    this.emails = Objects.requireNonNull(emails, "emails");
   }
 
   /**
@@ -152,6 +156,9 @@ class HeldTransferDecider {
     TransferRow after = update(held, transfer.status());
     reviews.record(held.id(), held.riskAssessmentId(), outcome(request, actorId, expired));
     audit.record(auditEntry(held, after, request, actorId, expired, clientIp));
+    // Q9: TRANSFER_CANCELLED or TRANSFER_EXPIRED to the sender, last, so it commits or rolls back
+    // with everything above.
+    emails.statusChanged(after);
     return new Decision(after, expired);
   }
 

@@ -9,6 +9,12 @@ spring:
   threads:
     virtual:
       enabled: true
+  task:
+    execution:
+      # The scheduler of app.scheduling (a ThreadPoolTaskScheduler) is also an Executor, and Boot's
+      # applicationTaskExecutor (virtual threads; direct emails, MVC async) backs off when any
+      # Executor bean exists. "force" keeps it exactly as it was.
+      mode: force
   datasource:
     # Empty defaults: startup fails fast without a database unless a test supplies one.
     # The runtime role is wallet_app: DML only, no ownership, not a superuser (doc 06 MVP-ADR-02).
@@ -99,6 +105,16 @@ app:
   database:
     lock-timeout: 5s
     statement-timeout: 10s
+  # The scheduler of every @Scheduled job (common.scheduling.SchedulingConfiguration). Set here, not
+  # with spring.task.scheduling.pool.size: with spring.threads.virtual.enabled Boot's scheduler is a
+  # SimpleAsyncTaskScheduler, which ignores that pool size and runs every fixed-delay job on one
+  # thread, so a long transfer-expiry run would hold back the email outbox. Two threads (owner
+  # decision, step 6 security review L2) let different jobs run side by side; a job never overlaps
+  # itself (fixed delay). Shutdown waits for running jobs at most await-termination (not a
+  # documented value). Checked at startup: pool-size at least 1.
+  scheduling:
+    pool-size: 2
+    await-termination: 30s
   # The business calendar of every module (documentations/06 MVP-ADR-22): "today" for the
   # date-of-birth check and the daily limits, and the zone in which emails state a time.
   business-zone: Asia/Bangkok
@@ -160,6 +176,17 @@ app:
     # seconds, at least 1s; checked at startup.
     review:
       duration: 24h
+    # Expiry of held transfers past their deadline (documentations/06 MVP-ADR-24 "Expiry", "Jobs
+    # (Q11)"): one transfer per transaction, FOR UPDATE SKIP LOCKED, safe with several instances.
+    expiry:
+      # Turns the scheduled job on; tests turn it off and call the expiry directly.
+      enabled: true
+      # How often the job runs: every 1 minute (Q11, MVP value).
+      interval: 1m
+      # The most due transfers one run expires or skips (a failed one does not count); the rest wait
+      # for the next run. Not a documented value (500, as the per-batch bound of the clean-up jobs,
+      # MVP-ADR-06 Z7).
+      max-per-run: 500
     # Idempotency-Key records of transfers (documentations/02 §1.4; doc 06 MVP-ADR-06; doc 07 D04),
     # in the transfer module's own table, apart from the wallet's records.
     idempotency:

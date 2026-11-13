@@ -5,12 +5,14 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -40,7 +42,7 @@ public class NotificationRepository {
         ORDER BY next_attempt_at, event_id
         LIMIT 1
         FOR UPDATE SKIP LOCKED)
-      RETURNING event_id, user_id, kind, attempts, occurred_at
+      RETURNING event_id, user_id, kind, attempts, occurred_at, CAST(payload AS text) AS payload
       """;
 
   private final JdbcClient jdbc;
@@ -112,7 +114,7 @@ public class NotificationRepository {
             UPDATE notification.notifications
             SET status = 'FAILED', last_failure = 'LeaseExpired'
             WHERE status = 'PENDING' AND attempts >= :maxAttempts AND next_attempt_at <= :now
-            RETURNING event_id, user_id, kind, attempts, occurred_at
+            RETURNING event_id, user_id, kind, attempts, occurred_at, CAST(payload AS text) AS payload
             """)
         .param("now", bind(now))
         .param("maxAttempts", maxAttempts)
@@ -167,13 +169,37 @@ public class NotificationRepository {
         .update();
   }
 
-  private static OutboxRow map(ResultSet rs) throws SQLException {
+  private OutboxRow map(ResultSet rs) throws SQLException {
     return new OutboxRow(
         rs.getObject("event_id", UUID.class),
         rs.getObject("user_id", UUID.class),
         rs.getString("kind"),
         rs.getInt("attempts"),
-        rs.getObject("occurred_at", OffsetDateTime.class).toInstant());
+        rs.getObject("occurred_at", OffsetDateTime.class).toInstant(),
+        values(rs.getString("payload")));
+  }
+
+  /**
+   * The stored template values, or {@code null} if the payload is not an object of strings: the
+   * dispatcher then fails that attempt, so a bad row never fails the claim and stops the run.
+   */
+  private Map<String, String> values(String payload) {
+    try {
+      JsonNode node = json.readTree(payload);
+      if (node == null || !node.isObject()) {
+        return null;
+      }
+      Map<String, String> values = new LinkedHashMap<>();
+      for (Map.Entry<String, JsonNode> property : node.properties()) {
+        if (!property.getValue().isString()) {
+          return null;
+        }
+        values.put(property.getKey(), property.getValue().asString());
+      }
+      return values;
+    } catch (RuntimeException e) {
+      return null;
+    }
   }
 
   private static OffsetDateTime bind(Instant instant) {

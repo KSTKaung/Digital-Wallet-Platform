@@ -22,6 +22,8 @@ import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.idempotency.IdempotentResult;
 import com.portfolio.wallet.common.idempotency.StoredResponse;
 import com.portfolio.wallet.common.money.Money;
+import com.portfolio.wallet.notification.application.EmailKind;
+import com.portfolio.wallet.notification.application.NotificationOutbox;
 import com.portfolio.wallet.risk.application.AssessmentDecision;
 import com.portfolio.wallet.risk.application.RiskAssessmentRequest;
 import com.portfolio.wallet.risk.application.RiskAssessmentResult;
@@ -41,6 +43,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -82,6 +85,7 @@ class TransferServiceTest {
   private final AuditService audit = mock(AuditService.class);
   private final JsonMapper json = JsonMapper.builder().build();
   private final LockedTransferWallets locked = mock(LockedTransferWallets.class);
+  private final NotificationOutbox outbox = mock(NotificationOutbox.class);
 
   private final TransferService service =
       new TransferService(
@@ -92,7 +96,8 @@ class TransferServiceTest {
           transfers,
           audit,
           new TransferReviewProperties(Duration.ofHours(24)),
-          json);
+          json,
+          new TransferEmails(outbox));
 
   private static TransferWalletView view(UUID wallet, UUID customer) {
     return new TransferWalletView(
@@ -343,7 +348,7 @@ class TransferServiceTest {
 
     assertThatThrownBy(() -> service.create(command())).isSameAs(below);
     verify(idempotency, never()).refuse(any(), any(), any());
-    verifyNoInteractions(risk, audit);
+    verifyNoInteractions(risk, audit, outbox);
     verify(transfers, never()).insert(any(), anyLong());
   }
 
@@ -464,12 +469,17 @@ class TransferServiceTest {
     assertThat(row.getValue().limitDate()).isEqualTo(LOCK_DAY);
     assertThat(row.getValue().riskAssessmentId()).isEqualTo(ASSESSMENT);
     assertThat(row.getValue().description()).isEqualTo("rent");
-    InOrder order = inOrder(wallets, transfers, audit);
+    InOrder order = inOrder(wallets, transfers, audit, outbox);
     order.verify(wallets).lock(SENDER_WALLET, RECEIVER_WALLET);
     order.verify(wallets).complete(eq(locked), any(), eq(created.reference()));
     order.verify(transfers).insert(any(), anyLong());
     ArgumentCaptor<AuditEntry> entry = ArgumentCaptor.forClass(AuditEntry.class);
     order.verify(audit).record(entry.capture());
+    // Q9: both parties, in the money transaction, amount, currency and reference only.
+    Map<String, String> values =
+        Map.of("amount", "100.00", "currency", "THB", "reference", created.reference());
+    order.verify(outbox).enqueue(SENDER, EmailKind.TRANSFER_SENT, values);
+    order.verify(outbox).enqueue(RECEIVER, EmailKind.TRANSFER_RECEIVED, values);
     assertThat(entry.getValue().result()).isEqualTo(AuditResult.SUCCESS);
     assertThat(entry.getValue().newValue())
         .containsEntry("ledgerTransactionId", LEDGER_TX.toString())
@@ -493,6 +503,13 @@ class TransferServiceTest {
     assertThat(row.getValue().ledgerStatus()).isNull();
     verify(wallets).hold(eq(locked), any());
     verify(wallets, never()).complete(any(), any(), any());
+    // Q9: the sender only; the receiver hears nothing before completion.
+    verify(outbox)
+        .enqueue(
+            SENDER,
+            EmailKind.TRANSFER_HELD,
+            Map.of("amount", "100.00", "currency", "THB", "reference", created.reference()));
+    verify(outbox, never()).enqueue(eq(RECEIVER), any(), any());
   }
 
   @Test
@@ -518,6 +535,8 @@ class TransferServiceTest {
     assertThat(entry.getValue().newValue()).containsEntry("errorCode", "RISK_BLOCKED");
     verify(wallets, never()).lock(any(), any());
     verify(idempotency, never()).execute(any(), any(), any());
+    // Q9: no email for a block.
+    verifyNoInteractions(outbox);
   }
 
   @Test
@@ -533,6 +552,7 @@ class TransferServiceTest {
     assertThat(entry.getValue().resourceId()).isNotNull();
     assertThat(entry.getValue().newValue()).containsEntry("errorCode", "INSUFFICIENT_BALANCE");
     verify(transfers, never()).insert(any(), anyLong());
+    verifyNoInteractions(outbox);
   }
 
   @Test
@@ -593,7 +613,7 @@ class TransferServiceTest {
   /** Nothing ran after the guard: no pre-check, assessment, engine, lock, row or audit. */
   private void assertNothingRanAfterTheGuard() {
     verify(wallets, never()).precheck(any(), any());
-    verifyNoInteractions(risk, audit);
+    verifyNoInteractions(risk, audit, outbox);
     verify(idempotency, never()).execute(any(), any(), any());
     verify(idempotency, never()).refuse(any(), any(), any());
     verify(wallets, never()).lock(any(), any());

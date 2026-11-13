@@ -20,6 +20,8 @@ import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.money.Money;
 import com.portfolio.wallet.common.time.BusinessTimeProperties;
 import com.portfolio.wallet.ledger.application.LedgerPostingService;
+import com.portfolio.wallet.notification.application.EmailKind;
+import com.portfolio.wallet.notification.application.NotificationOutbox;
 import com.portfolio.wallet.wallet.domain.LimitPolicy;
 import com.portfolio.wallet.wallet.domain.Operation;
 import com.portfolio.wallet.wallet.domain.OperationLimits;
@@ -71,6 +73,7 @@ class MoneyMovementServiceTest {
   private final AuditService audit = mock(AuditService.class);
   private final IdempotencyService idempotency = mock(IdempotencyService.class);
   private final JsonMapper json = JsonMapper.builder().build();
+  private final NotificationOutbox outbox = mock(NotificationOutbox.class);
 
   private MoneyMovementService service;
 
@@ -92,7 +95,8 @@ class MoneyMovementServiceTest {
             new LimitPolicy(limits),
             new BusinessTimeProperties(ZoneId.of("Asia/Bangkok")),
             Clock.fixed(NOW, ZoneOffset.UTC),
-            json);
+            json,
+            outbox);
     // Runs the movement; a stored refusal runs the hook, as the real service does after storing it.
     when(idempotency.execute(any(), any(), any()))
         .thenAnswer(
@@ -174,7 +178,7 @@ class MoneyMovementServiceTest {
     assertThat(view.ledgerStatus()).isEqualTo("POSTED");
     assertThat(view.reference()).matches("DEP-[0-9A-F]{32}");
 
-    InOrder order = inOrder(movements, wallets, usages, ledger, audit);
+    InOrder order = inOrder(movements, wallets, usages, ledger, audit, outbox);
     order.verify(movements).findByCustomerAndKey(Table.DEPOSITS, CUSTOMER, KEY);
     order.verify(wallets).findByCustomerForUpdate(CUSTOMER);
     order.verify(usages).lockOrCreate(WALLET, "DEPOSIT", BANGKOK_DAY);
@@ -184,6 +188,13 @@ class MoneyMovementServiceTest {
     ArgumentCaptor<MoneyMovementRow> row = ArgumentCaptor.forClass(MoneyMovementRow.class);
     order.verify(movements).insert(eq(Table.DEPOSITS), row.capture(), eq("salary"));
     order.verify(audit).record(any(AuditEntry.class));
+    // Q9: the customer's email in the same transaction; never the note or the balance.
+    order
+        .verify(outbox)
+        .enqueue(
+            CUSTOMER,
+            EmailKind.DEPOSIT_COMPLETED,
+            Map.of("amount", "250.50", "currency", "THB", "reference", view.reference()));
 
     assertThat(row.getValue().id()).isEqualTo(view.id());
     assertThat(row.getValue().idempotencyKey()).isEqualTo(KEY);
@@ -199,6 +210,11 @@ class MoneyMovementServiceTest {
     verify(wallets).updateAvailableBalance(WALLET, new BigDecimal("0.00"), 7);
     verify(ledger).postWithdrawal(WALLET, view.reference(), money("1000"));
     verify(movements).insert(eq(Table.WITHDRAWALS), any(), eq(null));
+    verify(outbox)
+        .enqueue(
+            CUSTOMER,
+            EmailKind.WITHDRAWAL_COMPLETED,
+            Map.of("amount", "1000.00", "currency", "THB", "reference", view.reference()));
   }
 
   @Test
@@ -359,7 +375,7 @@ class MoneyMovementServiceTest {
 
     assertRejected(() -> withdraw("1000.00"), ErrorCode.INSUFFICIENT_BALANCE);
     verify(wallets, never()).updateAvailableBalance(any(), any(), anyLong());
-    verifyNoInteractions(ledger);
+    verifyNoInteractions(ledger, outbox);
   }
 
   @Test
@@ -387,6 +403,7 @@ class MoneyMovementServiceTest {
     assertThat(entries.getAllValues().get(1).newValue())
         .containsEntry("errorCode", "DAILY_LIMIT_EXCEEDED")
         .doesNotContainValue("salary");
+    verifyNoInteractions(outbox);
   }
 
   @Test
@@ -443,7 +460,7 @@ class MoneyMovementServiceTest {
     assertThat(view.reference()).isEqualTo("WDR-STORED");
     assertThat(view.walletNumber()).isEqualTo(NUMBER);
     verify(wallets, never()).findByCustomerForUpdate(any());
-    verifyNoInteractions(ledger, audit, usages);
+    verifyNoInteractions(ledger, audit, usages, outbox);
   }
 
   @Test

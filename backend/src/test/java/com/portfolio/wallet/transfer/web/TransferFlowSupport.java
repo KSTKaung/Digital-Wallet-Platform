@@ -9,9 +9,13 @@ import com.portfolio.wallet.audit.persistence.AuditLogRepository;
 import com.portfolio.wallet.auth.application.AccessTokenIssuer;
 import com.portfolio.wallet.auth.domain.Role;
 import com.portfolio.wallet.ledger.persistence.LedgerPostingRepository;
+import com.portfolio.wallet.notification.application.EmailMessage;
+import com.portfolio.wallet.notification.application.OutboxDispatcher;
 import com.portfolio.wallet.notification.application.RecordingEmailSender;
+import com.portfolio.wallet.notification.persistence.NotificationRepository;
 import com.portfolio.wallet.risk.persistence.RiskAssessmentRepository;
 import com.portfolio.wallet.support.DatabaseIntegrationTest;
+import com.portfolio.wallet.support.OutboxRows;
 import com.portfolio.wallet.transfer.persistence.TransferRepository;
 import com.portfolio.wallet.wallet.application.WalletNumberGenerator;
 import java.math.BigDecimal;
@@ -79,6 +83,7 @@ abstract class TransferFlowSupport extends DatabaseIntegrationTest {
   @MockitoSpyBean LedgerPostingRepository ledgerRowsSpy;
   @MockitoSpyBean AuditLogRepository auditRowsSpy;
   @MockitoSpyBean RiskAssessmentRepository riskRowsSpy;
+  @MockitoSpyBean NotificationRepository notificationRowsSpy;
 
   record Account(UUID id, String token) {}
 
@@ -455,5 +460,43 @@ abstract class TransferFlowSupport extends DatabaseIntegrationTest {
         "SELECT action, decided_by, requested_action, actor_user_id, system_reason,"
             + " reason_category, reason FROM risk.risk_reviews WHERE transfer_id = ?",
         transferId);
+  }
+
+  // Emails (Q9) ---------------------------------------------------------------------------------
+
+  /** Every transfer email kind; the KYC approval of a test account is not one. */
+  static final String[] TRANSFER_EMAIL_KINDS = {
+    "TRANSFER_SENT",
+    "TRANSFER_RECEIVED",
+    "TRANSFER_HELD",
+    "TRANSFER_REJECTED",
+    "TRANSFER_CANCELLED",
+    "TRANSFER_EXPIRED"
+  };
+
+  @Autowired OutboxDispatcher outboxDispatcher;
+  @Autowired RecordingEmailSender mail;
+
+  /** The account's transfer emails in the outbox, oldest first. */
+  List<OutboxRows.Row> transferEmails(Account account) {
+    return OutboxRows.of(jdbc, account.id(), TRANSFER_EMAIL_KINDS);
+  }
+
+  String address(Account account) {
+    return "user-" + account.id() + "@example.test";
+  }
+
+  /** Sends {@code row} now, as the dispatcher's job would, and returns the message delivered. */
+  EmailMessage delivered(Account account, OutboxRows.Row row) {
+    assertThat(outboxDispatcher.dispatch(row.eventId())).as("claimed").isTrue();
+    return mail.messages().stream()
+        .filter(m -> m.to().equals(address(account)) && m.kind().name().equals(row.kind()))
+        .reduce((first, second) -> second)
+        .orElseThrow();
+  }
+
+  /** The template values of a transfer email: amount, currency and reference, nothing else. */
+  static Map<String, String> emailValues(String amount, String reference) {
+    return Map.of("amount", amount, "currency", "THB", "reference", reference);
   }
 }

@@ -101,6 +101,14 @@ import tools.jackson.databind.json.JsonMapper;
  * Two concurrent requests with the same key may both be assessed; only one transfer, hold or
  * movement results, and the other assessment stays as an orphan (Q4).
  *
+ * <h2>Emails (Q9)</h2>
+ *
+ * Written by {@link TransferEmails} in the money transaction, so they commit or roll back with it
+ * (MVP-ADR-25): {@code COMPLETED} emails the sender ({@code TRANSFER_SENT}) and the receiver
+ * ({@code TRANSFER_RECEIVED}); {@code PENDING_REVIEW} emails the sender only ({@code
+ * TRANSFER_HELD}). A {@code BLOCK}, a stored refusal, a replay (in the key's window or after it), a
+ * {@code 409} and a rollback write none.
+ *
  * <h2>Responses and logs</h2>
  *
  * The {@code 201} body is a {@link TransferView}; it is stored on the idempotency record and
@@ -131,6 +139,7 @@ public class TransferService {
   private final AuditService audit;
   private final TransferReviewProperties review;
   private final JsonMapper json;
+  private final TransferEmails emails;
 
   public TransferService(
       WalletLookupService recipients,
@@ -140,7 +149,8 @@ public class TransferService {
       TransferRepository transfers,
       AuditService audit,
       TransferReviewProperties review,
-      JsonMapper json) {
+      JsonMapper json,
+      TransferEmails emails) {
     this.recipients = Objects.requireNonNull(recipients, "recipients");
     this.wallets = Objects.requireNonNull(wallets, "wallets");
     this.idempotency = Objects.requireNonNull(idempotency, "idempotency");
@@ -149,6 +159,7 @@ public class TransferService {
     this.audit = Objects.requireNonNull(audit, "audit");
     this.review = Objects.requireNonNull(review, "review");
     this.json = Objects.requireNonNull(json, "json");
+    this.emails = Objects.requireNonNull(emails, "emails");
   }
 
   /**
@@ -355,11 +366,15 @@ public class TransferService {
         row = insert(attempt, assessment, TransferStatus.COMPLETED, settlement.limitDate(), POSTED);
         audit.record(
             TransferAudit.created(row, settlement.ledgerTransactionId(), attempt.clientIp()));
+        // Q9: TRANSFER_SENT to the sender, TRANSFER_RECEIVED to the receiver.
+        emails.statusChanged(row);
       }
       case MANUAL_REVIEW -> {
         LocalDate limitDate = wallets.hold(locked, attempt.amount());
         row = insert(attempt, assessment, TransferStatus.PENDING_REVIEW, limitDate, null);
         audit.record(TransferAudit.created(row, null, attempt.clientIp()));
+        // Q9: TRANSFER_HELD to the sender only; the receiver hears nothing before completion.
+        emails.statusChanged(row);
       }
       case BLOCK -> throw new IllegalStateException("a blocked transfer moves no money");
       default -> throw new IllegalStateException("unknown risk decision");

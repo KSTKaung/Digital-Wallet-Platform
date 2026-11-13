@@ -81,6 +81,8 @@ public final class PostgresTestDatabase {
     registry.add("app.wallet.idempotency.purge.enabled", () -> false);
     registry.add("app.transfer.idempotency.purge.enabled", () -> false);
     registry.add("app.wallet.lookup.purge.enabled", () -> false);
+    // Tests run the transfer expiry themselves, so no background run expires their held transfers.
+    registry.add("app.transfer.expiry.enabled", () -> false);
     TestSecrets.values().forEach((name, value) -> registry.add(name, () -> value));
   }
 

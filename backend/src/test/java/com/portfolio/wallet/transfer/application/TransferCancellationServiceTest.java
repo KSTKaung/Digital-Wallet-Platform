@@ -19,6 +19,8 @@ import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.money.Money;
+import com.portfolio.wallet.notification.application.EmailKind;
+import com.portfolio.wallet.notification.application.NotificationOutbox;
 import com.portfolio.wallet.risk.application.RiskReviewOutcome;
 import com.portfolio.wallet.risk.application.RiskReviewService;
 import com.portfolio.wallet.transfer.application.HeldTransferDecider.Request;
@@ -67,6 +69,8 @@ class TransferCancellationServiceTest {
   private static final Instant HELD_AT = Instant.parse("2026-11-10T05:00:00Z");
   private static final Instant DEADLINE = HELD_AT.plus(Duration.ofHours(24));
   private static final LocalDate LIMIT_DATE = LocalDate.parse("2026-11-10");
+  private static final Map<String, String> EMAIL_VALUES =
+      Map.of("amount", "1300.00", "currency", "THB", "reference", "TRF-1");
 
   private final TransferRepository transfers = mock(TransferRepository.class);
   private final WalletTransferService wallets = mock(WalletTransferService.class);
@@ -76,9 +80,10 @@ class TransferCancellationServiceTest {
   private final TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
   private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
   private final LockedTransferWallets locked = mock(LockedTransferWallets.class);
+  private final NotificationOutbox outbox = mock(NotificationOutbox.class);
 
   private final HeldTransferDecider decider =
-      new HeldTransferDecider(transfers, wallets, reviews, audit);
+      new HeldTransferDecider(transfers, wallets, reviews, audit, new TransferEmails(outbox));
   private final TransferCancellationService service =
       new TransferCancellationService(transfers, decider, counterparties, timeouts, transactions);
 
@@ -164,7 +169,7 @@ class TransferCancellationServiceTest {
     assertThat(view.status()).isEqualTo("CANCELLED");
     assertThat(view.direction()).isEqualTo("SENT");
     assertThat(view.counterparty().maskedWalletNumber()).isEqualTo("*******8901");
-    InOrder order = inOrder(timeouts, transfers, wallets, reviews, audit, counterparties);
+    InOrder order = inOrder(timeouts, transfers, wallets, reviews, audit, outbox, counterparties);
     order.verify(timeouts).apply();
     order.verify(transfers).lockSentBy(TRANSFER, SENDER);
     order.verify(wallets).lock(SENDER_WALLET, RECEIVER_WALLET);
@@ -178,7 +183,10 @@ class TransferCancellationServiceTest {
     assertThat(review.getValue().toString()).contains("CUSTOMER_CANCEL");
     ArgumentCaptor<AuditEntry> entry = ArgumentCaptor.forClass(AuditEntry.class);
     order.verify(audit).record(entry.capture());
+    // Q9: the sender's email, last in the transaction; amount, currency and reference only.
+    order.verify(outbox).enqueue(SENDER, EmailKind.TRANSFER_CANCELLED, EMAIL_VALUES);
     order.verify(counterparties).of(List.of(RECEIVER_WALLET));
+    verify(outbox, never()).enqueue(eq(RECEIVER), any(), any());
     assertThat(entry.getValue().action()).isEqualTo("TRANSFER_REVIEW");
     assertThat(entry.getValue().actorId()).isEqualTo(SENDER);
     assertThat(entry.getValue().actorType()).isEqualTo(ActorType.CUSTOMER);
@@ -227,6 +235,7 @@ class TransferCancellationServiceTest {
         .containsEntry("decidedBy", "SYSTEM")
         .containsEntry("requestedAction", "CANCEL")
         .containsEntry("systemReason", "REVIEW_DEADLINE_PASSED");
+    verify(outbox).enqueue(SENDER, EmailKind.TRANSFER_EXPIRED, EMAIL_VALUES);
     // The expiry committed: the transaction was not rolled back.
     verify(transactions).commit(any());
     verify(transactions, never()).rollback(any());
@@ -259,6 +268,7 @@ class TransferCancellationServiceTest {
     verify(wallets, never()).release(any(), any(), any());
     verify(reviews, never()).record(any(), any(), any());
     verify(audit, never()).record(any());
+    verify(outbox, never()).enqueue(any(), any(), any());
   }
 
   @Test
@@ -272,6 +282,7 @@ class TransferCancellationServiceTest {
 
     verify(reviews, never()).record(any(), any(), any());
     verify(audit, never()).record(any());
+    verify(outbox, never()).enqueue(any(), any(), any());
     verify(transactions).rollback(any());
   }
 
@@ -325,6 +336,7 @@ class TransferCancellationServiceTest {
         .containsEntry("decidedBy", "SYSTEM")
         .containsEntry("systemReason", "REVIEW_DEADLINE_PASSED")
         .doesNotContainKey("requestedAction");
+    verify(outbox).enqueue(SENDER, EmailKind.TRANSFER_EXPIRED, EMAIL_VALUES);
   }
 
   @Test

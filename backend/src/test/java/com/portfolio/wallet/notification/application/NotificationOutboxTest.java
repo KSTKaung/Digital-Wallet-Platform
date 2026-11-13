@@ -48,7 +48,7 @@ class NotificationOutboxTest {
     verifyNoInteractions(notifications);
   }
 
-  /** No kind declares a value, so nothing unplanned (an address, KYC content) can be stored. */
+  /** A KYC email declares no value, so nothing unplanned (an address, KYC content) is stored. */
   @Test
   void undeclaredOrNullValuesAreRefusedWithoutEchoingThem() {
     assertThatThrownBy(
@@ -60,6 +60,37 @@ class NotificationOutboxTest {
     assertThatThrownBy(() -> outbox.enqueue(user, EmailKind.KYC_APPROVED, withNull))
         .isInstanceOf(IllegalArgumentException.class);
     verifyNoInteractions(notifications);
+  }
+
+  /** Q9: a money email takes exactly the amount, the currency and the reference. */
+  @ParameterizedTest
+  @EnumSource(
+      value = EmailKind.class,
+      names = {
+        "DEPOSIT_COMPLETED",
+        "WITHDRAWAL_COMPLETED",
+        "TRANSFER_SENT",
+        "TRANSFER_RECEIVED",
+        "TRANSFER_HELD",
+        "TRANSFER_REJECTED",
+        "TRANSFER_CANCELLED",
+        "TRANSFER_EXPIRED"
+      })
+  void aMoneyEmailIsStoredWithExactlyItsValues(EmailKind kind) {
+    Map<String, String> values =
+        MoneyEmailValues.of(new java.math.BigDecimal("12.5"), "THB", "TRF-ABC123");
+
+    UUID event = outbox.enqueue(user, kind, values);
+
+    verify(notifications).insert(event, user, kind.name(), values, clock.instant());
+    // Missing values, or values from elsewhere, are refused.
+    assertThatThrownBy(() -> outbox.enqueue(user, kind))
+        .isInstanceOf(IllegalArgumentException.class);
+    Map<String, String> more = new HashMap<>(values);
+    more.put("walletNumber", "12345678901");
+    assertThatThrownBy(() -> outbox.enqueue(user, kind, more))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageNotContaining("12345678901");
   }
 
   @Test

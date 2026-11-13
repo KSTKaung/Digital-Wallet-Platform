@@ -162,6 +162,61 @@ public class TransferRepository {
         .optional();
   }
 
+  /**
+   * A held transfer whose review deadline has passed: the expiry job's candidate, and its position
+   * in the job's order.
+   */
+  public record DueTransfer(UUID id, Instant reviewExpiresAt) {
+
+    public DueTransfer {
+      Objects.requireNonNull(id, "id");
+      Objects.requireNonNull(reviewExpiresAt, "reviewExpiresAt");
+    }
+  }
+
+  private static final String DUE =
+      """
+      SELECT id, review_expires_at FROM transfer.transfers
+      WHERE status = 'PENDING_REVIEW' AND review_expires_at <= statement_timestamp()
+      """;
+
+  /**
+   * The expiry job's candidates (documentations/06 MVP-ADR-24 "Expiry"): {@code PENDING_REVIEW}
+   * transfers whose {@code review_expires_at} is at or before the database time of this statement,
+   * the same clock as the V4 guard, soonest deadline first, then by id (partial index {@code
+   * ix_transfers_review_expires}). Read without a lock: each candidate is locked and re-checked in
+   * a transaction of its own ({@link #lockForUpdate} with {@link LockMode#SKIP_LOCKED}).
+   *
+   * @param after the last candidate of the previous page, or null for the first page; the page
+   *     starts strictly after it in {@code (review_expires_at, id)} order, so one run never returns
+   *     a transfer twice, also one it skipped or failed to expire
+   * @param limit at least 1
+   */
+  public List<DueTransfer> findDueForExpiry(DueTransfer after, int limit) {
+    if (limit < 1) {
+      throw new IllegalArgumentException("limit must be at least 1");
+    }
+    JdbcClient.StatementSpec statement;
+    if (after == null) {
+      statement = jdbc.sql(DUE + " ORDER BY review_expires_at, id LIMIT :limit");
+    } else {
+      statement =
+          jdbc.sql(
+                  DUE
+                      + " AND (review_expires_at, id) > (:afterDeadline, :afterId)"
+                      + " ORDER BY review_expires_at, id LIMIT :limit")
+              .param("afterDeadline", Timestamps.bind(after.reviewExpiresAt()))
+              .param("afterId", after.id());
+    }
+    return statement
+        .param("limit", limit)
+        .query(
+            (rs, row) ->
+                new DueTransfer(
+                    rs.getObject("id", UUID.class), Timestamps.read(rs, "review_expires_at")))
+        .list();
+  }
+
   /** How a transfer-row lock treats a row another transaction holds. */
   public enum LockMode {
     /** Wait for it, bounded by the D14 {@code lock_timeout}: cancel and staff review. */
