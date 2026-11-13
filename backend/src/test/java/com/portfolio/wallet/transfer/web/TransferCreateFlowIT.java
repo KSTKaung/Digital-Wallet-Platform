@@ -363,13 +363,24 @@ class TransferCreateFlowIT extends TransferFlowSupport {
     assertThat(transfersOf(sender)).hasSize(1);
   }
 
+  /**
+   * A raw path, from a client address of its own like every other transfer here: without one,
+   * MockMvc's default 127.0.0.1 shares the per-IP lookup window with every request in this context
+   * that sets none, so this test could get 429 depending on test order.
+   */
   private MockHttpServletResponse postRaw(String path, String json, Account sender)
       throws Exception {
+    String ip = randomIp();
     return send(
         post(java.net.URI.create(path))
             .contentType(MediaType.APPLICATION_JSON)
             .header(KEY_HEADER, UUID.randomUUID().toString())
-            .content(json),
+            .content(json)
+            .with(
+                r -> {
+                  r.setRemoteAddr(ip);
+                  return r;
+                }),
         sender.token());
   }
 
