@@ -70,6 +70,46 @@ class TransferLockTimeoutIT extends TransferReviewFlowSupport {
     assertBalances(sender, "90.00", "0.00");
   }
 
+  /**
+   * Q6 on the hold path (PR 5a step 7): the money transaction of a {@code MANUAL_REVIEW} transfer
+   * waits on the recipient's wallet, ends at the lock timeout with {@code 500}, reserves nothing
+   * and stores nothing for the key; the retry with the same key holds once.
+   */
+  @Test
+  void aLockTimeoutOnTheHoldPathIs500ReservesNothingAndIsNotStored() throws Exception {
+    Account sender = funded("2000.00");
+    Account recipient = withWallet();
+    UUID key = UUID.randomUUID();
+    MockHttpServletResponse timedOut;
+    long elapsedMillis;
+    try (Connection holder = openTransaction()) {
+      queryOne(
+          holder,
+          "SELECT 1 FROM wallet.wallets WHERE id = ? FOR UPDATE",
+          Integer.class,
+          walletId(recipient));
+      long started = System.nanoTime();
+      timedOut = transfer(sender, recipient, HOLD, key);
+      elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+      holder.rollback();
+    }
+
+    assertThat(timedOut.getStatus()).isEqualTo(500);
+    assertThat(errorCode(timedOut)).isEqualTo("SYSTEM_ERROR");
+    assertThat(elapsedMillis).isLessThan(BOUND_MILLIS);
+    assertThat(transferRecords(sender, key)).isZero();
+    assertThat(transfersOf(sender)).isEmpty();
+    assertBalances(sender, "2000.00", "0.00");
+    assertThat(transferReserved(sender)).isEqualByComparingTo("0");
+    assertThat(transferEmails(sender)).isEmpty();
+
+    MockHttpServletResponse retried = transfer(sender, recipient, HOLD, key);
+    assertThat(retried.getStatus()).isEqualTo(201);
+    assertThat(body(retried).get("status").asString()).isEqualTo("PENDING_REVIEW");
+    assertBalances(sender, "700.00", "1300.00");
+    assertThat(transferReserved(sender)).isEqualByComparingTo("1300.00");
+  }
+
   @Test
   void aCancelBlockedOnTheTransferRowIs500AndLeavesTheHold() throws Exception {
     Account sender = funded("2000.00");
