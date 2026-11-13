@@ -11,8 +11,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     security review, L2: the email outbox keeps sending while a long expiry run is in progress).
  *     At least 1. A job never overlaps itself whatever the size (fixed delay)
  * @param awaitTermination how long shutdown waits for running jobs before it stops them, as Boot's
- *     {@code spring.task.scheduling.shutdown.await-termination-period}; zero stops at once. Not a
- *     documented value
+ *     {@code spring.task.scheduling.shutdown.await-termination-period}; zero stops at once. 30 s
+ *     (owner, 2026-11-13; doc 06 MVP-ADR-24 "Jobs (Q11)" amendment)
  */
 @ConfigurationProperties(prefix = "app.scheduling")
 public record SchedulingProperties(int poolSize, Duration awaitTermination) {

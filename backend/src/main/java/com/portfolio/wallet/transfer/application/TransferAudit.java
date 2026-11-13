@@ -20,9 +20,10 @@ import java.util.UUID;
  *       reached a business outcome: in the money transaction with the {@code COMPLETED} or {@code
  *       PENDING_REVIEW} row, in the refusal's own transaction with the {@code BLOCKED} row or a
  *       stored refusal, and independently for a failed risk assessment;
- *   <li>{@value #TRANSFER_REVIEW}: an outcome of a held transfer (5a: the customer cancel, and the
- *       expiry a late cancel causes), in the transaction of the outcome, with the five facts of the
- *       review row as separate fields.
+ *   <li>{@value #TRANSFER_REVIEW}: an outcome of a held transfer (5a: the customer cancel, the
+ *       expiry a late cancel causes, and the expiry job with actor {@code SYSTEM}; 5b adds the
+ *       staff decisions), in the transaction of the outcome, with the five facts of the review row
+ *       as separate fields.
  * </ul>
  *
  * Values are ids, states, amounts and codes; never the description, the risk score, rule codes or

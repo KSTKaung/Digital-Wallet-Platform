@@ -400,7 +400,8 @@ class RiskAssessmentServiceIT extends DatabaseIntegrationTest {
   @Test
   void thePreparerRunsInsideTheTransactionBeforeTheLock() throws Exception {
     UUID sender = UUID.randomUUID();
-    // What PR 5a step 4 will do: a lock timeout set in the preparer bounds the sender lock wait.
+    // As the D14 timeouts do since PR 5a step 4: a lock timeout set in the preparer bounds the
+    // sender lock wait.
     RiskAssessmentService bounded =
         countingService(() -> jdbc.execute("SET LOCAL lock_timeout = '200ms'"));
     try (Connection holder = holdSenderLock(sender)) {

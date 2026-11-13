@@ -98,8 +98,9 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
   # Lock and statement timeouts (documentations/06 MVP-ADR-06 "Lock and statement timeouts"; doc 07
   # D14; owner, 2026-11-06, initial MVP defaults). Set with SET LOCAL as the first statement of
-  # every money transaction (deposits, withdrawals, transfers), of the risk assessment and of the
-  # wallet lookup, so no wait is unbounded (doc 07 D14 open risk Z1). A timeout is 500 SYSTEM_ERROR
+  # every money transaction (deposits, withdrawals, transfers), of the risk assessment, the wallet
+  # lookup, freeze and unfreeze, the transfer cancel and each expiry, so no wait is unbounded (doc 07
+  # D14; a role-level default before production is D34). A timeout is 500 SYSTEM_ERROR
   # and is never stored for an Idempotency-Key. Checked at startup: positive, whole milliseconds,
   # at most 2147483647 ms, statement-timeout not shorter than lock-timeout.
   database:
@@ -110,8 +111,8 @@ app:
   # SimpleAsyncTaskScheduler, which ignores that pool size and runs every fixed-delay job on one
   # thread, so a long transfer-expiry run would hold back the email outbox. Two threads (owner
   # decision, step 6 security review L2) let different jobs run side by side; a job never overlaps
-  # itself (fixed delay). Shutdown waits for running jobs at most await-termination (not a
-  # documented value). Checked at startup: pool-size at least 1.
+  # itself (fixed delay). Shutdown waits for running jobs at most await-termination (30 s,
+  # owner, 2026-11-13). Checked at startup: pool-size at least 1.
   scheduling:
     pool-size: 2
     await-termination: 30s
@@ -184,8 +185,7 @@ app:
       # How often the job runs: every 1 minute (Q11, MVP value).
       interval: 1m
       # The most due transfers one run expires or skips (a failed one does not count); the rest wait
-      # for the next run. Not a documented value (500, as the per-batch bound of the clean-up jobs,
-      # MVP-ADR-06 Z7).
+      # for the next run. 500 (owner, 2026-11-13; doc 06 MVP-ADR-24 "Jobs (Q11)" amendment).
       max-per-run: 500
     # Idempotency-Key records of transfers (documentations/02 §1.4; doc 06 MVP-ADR-06; doc 07 D04),
     # in the transfer module's own table, apart from the wallet's records.

@@ -27,9 +27,9 @@ public record TransferIdempotencyProperties(Duration ttl, Purge purge) {
 
   /**
    * @param enabled turns the scheduled job on; tests turn it off and call the purge directly
-   * @param interval how often the job runs; not a documented value
-   * @param batchSize the most rows one DELETE statement removes, so each statement is short; not a
-   *     documented value
+   * @param interval how often the job runs: hourly (owner, 2026-11-04, MVP-ADR-06 Z7)
+   * @param batchSize the most rows one DELETE statement removes, so each statement is short: 500
+   *     (owner, 2026-11-04, MVP-ADR-06 Z7)
    */
   public record Purge(boolean enabled, Duration interval, int batchSize) {
 

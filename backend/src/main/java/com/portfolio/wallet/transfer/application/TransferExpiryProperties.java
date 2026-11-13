@@ -12,8 +12,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param interval how often the job runs: every 1 minute (Q11, MVP value)
  * @param maxPerRun the most due transfers one run expires or skips, so one run stays bounded; the
  *     rest wait for the next run. A transfer that fails does not count, so failures cannot use up
- *     the budget; each candidate is still handled at most once per run. Not a documented value
- *     (500, as the batch size of the clean-up jobs, MVP-ADR-06 Z7)
+ *     the budget; each candidate is still handled at most once per run. 500 (owner, 2026-11-13; doc
+ *     06 MVP-ADR-24 "Jobs (Q11)" amendment)
  */
 @ConfigurationProperties(prefix = "app.transfer.expiry")
 public record TransferExpiryProperties(boolean enabled, Duration interval, int maxPerRun) {
