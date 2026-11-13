@@ -98,6 +98,53 @@ class LedgerPostingServiceTest {
   }
 
   @Test
+  void transferDebitsTheSenderAndCreditsTheRecipient() {
+    UUID recipientWallet = UUID.randomUUID();
+    UUID recipientAccount = UUID.randomUUID();
+    when(postings.findCustomerAccount(recipientWallet))
+        .thenReturn(
+            Optional.of(
+                new LedgerAccountRow(
+                    recipientAccount, null, "CUSTOMER", recipientWallet, "THB", "ACTIVE")));
+
+    UUID id = service.postTransfer(WALLET, recipientWallet, "TRF-1", AMOUNT);
+
+    InOrder order = inOrder(postings);
+    order.verify(postings).insertTransaction(eq(id), eq("TRF-1"), eq("TRANSFER"), eq("THB"), any());
+    order
+        .verify(postings)
+        .insertEntry(id, CUSTOMER_ACCOUNT, "DEBIT", new BigDecimal("250.50"), "THB");
+    order
+        .verify(postings)
+        .insertEntry(id, recipientAccount, "CREDIT", new BigDecimal("250.50"), "THB");
+    verify(postings, never()).findByCode(anyString());
+  }
+
+  @Test
+  void aTransferNeedsTwoActiveCustomerAccounts() {
+    UUID recipientWallet = UUID.randomUUID();
+    when(postings.findCustomerAccount(recipientWallet)).thenReturn(Optional.empty());
+    assertThatThrownBy(() -> service.postTransfer(WALLET, recipientWallet, "TRF-2", AMOUNT))
+        .isInstanceOf(IllegalStateException.class);
+
+    when(postings.findCustomerAccount(recipientWallet))
+        .thenReturn(
+            Optional.of(
+                new LedgerAccountRow(
+                    UUID.randomUUID(), null, "CUSTOMER", recipientWallet, "THB", "FROZEN")));
+    assertThatThrownBy(() -> service.postTransfer(WALLET, recipientWallet, "TRF-3", AMOUNT))
+        .isInstanceOf(LedgerAccountNotActiveException.class);
+
+    // The same wallet on both sides is the same account: refused by the template.
+    assertThatThrownBy(() -> service.postTransfer(WALLET, WALLET, "TRF-4", AMOUNT))
+        .isInstanceOf(com.portfolio.wallet.ledger.domain.InvalidPostingException.class);
+    assertThatThrownBy(() -> service.postTransfer(null, recipientWallet, "TRF-5", AMOUNT))
+        .isInstanceOf(NullPointerException.class);
+    verify(postings, never())
+        .insertTransaction(any(), anyString(), anyString(), anyString(), any());
+  }
+
+  @Test
   void returnsTheNewTransactionId() {
     assertThat(service.postDeposit(WALLET, "DEP-5", AMOUNT)).isNotNull();
   }

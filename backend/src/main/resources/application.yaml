@@ -9,6 +9,12 @@ spring:
   threads:
     virtual:
       enabled: true
+  task:
+    execution:
+      # The scheduler of app.scheduling (a ThreadPoolTaskScheduler) is also an Executor, and Boot's
+      # applicationTaskExecutor (virtual threads; direct emails, MVC async) backs off when any
+      # Executor bean exists. "force" keeps it exactly as it was.
+      mode: force
   datasource:
     # Empty defaults: startup fails fast without a database unless a test supplies one.
     # The runtime role is wallet_app: DML only, no ownership, not a superuser (doc 06 MVP-ADR-02).
@@ -90,6 +96,26 @@ logging:
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # Lock and statement timeouts (documentations/06 MVP-ADR-06 "Lock and statement timeouts"; doc 07
+  # D14; owner, 2026-11-06, initial MVP defaults). Set with SET LOCAL as the first statement of
+  # every money transaction (deposits, withdrawals, transfers), of the risk assessment, the wallet
+  # lookup, freeze and unfreeze, the transfer cancel and each expiry, so no wait is unbounded (doc 07
+  # D14; a role-level default before production is D34). A timeout is 500 SYSTEM_ERROR
+  # and is never stored for an Idempotency-Key. Checked at startup: positive, whole milliseconds,
+  # at most 2147483647 ms, statement-timeout not shorter than lock-timeout.
+  database:
+    lock-timeout: 5s
+    statement-timeout: 10s
+  # The scheduler of every @Scheduled job (common.scheduling.SchedulingConfiguration). Set here, not
+  # with spring.task.scheduling.pool.size: with spring.threads.virtual.enabled Boot's scheduler is a
+  # SimpleAsyncTaskScheduler, which ignores that pool size and runs every fixed-delay job on one
+  # thread, so a long transfer-expiry run would hold back the email outbox. Two threads (owner
+  # decision, step 6 security review L2) let different jobs run side by side; a job never overlaps
+  # itself (fixed delay). Shutdown waits for running jobs at most await-termination (30 s,
+  # owner, 2026-11-13). Checked at startup: pool-size at least 1.
+  scheduling:
+    pool-size: 2
+    await-termination: 30s
   # The business calendar of every module (documentations/06 MVP-ADR-22): "today" for the
   # date-of-birth check and the daily limits, and the zone in which emails state a time.
   business-zone: Asia/Bangkok
@@ -144,6 +170,78 @@ app:
         # Not documented values.
         interval: 1h
         batch-size: 500
+  transfer:
+    # Manual review of a held transfer (documentations/06 MVP-ADR-24 "Expiry"; owner, 2026-10-30,
+    # doc 07 D28): a PENDING_REVIEW transfer expires this long after it was held. The database sets
+    # held_at and computes review_expires_at = held_at + duration in the same statement. Whole
+    # seconds, at least 1s; checked at startup.
+    review:
+      duration: 24h
+    # Expiry of held transfers past their deadline (documentations/06 MVP-ADR-24 "Expiry", "Jobs
+    # (Q11)"): one transfer per transaction, FOR UPDATE SKIP LOCKED, safe with several instances.
+    expiry:
+      # Turns the scheduled job on; tests turn it off and call the expiry directly.
+      enabled: true
+      # How often the job runs: every 1 minute (Q11, MVP value).
+      interval: 1m
+      # The most due transfers one run expires or skips (a failed one does not count); the rest wait
+      # for the next run. 500 (owner, 2026-11-13; doc 06 MVP-ADR-24 "Jobs (Q11)" amendment).
+      max-per-run: 500
+    # Idempotency-Key records of transfers (documentations/02 §1.4; doc 06 MVP-ADR-06; doc 07 D04),
+    # in the transfer module's own table, apart from the wallet's records.
+    idempotency:
+      # How long a key is retained: 24 hours (doc 02 §1.4; doc 07 D04). At most 30 days (doc 03 §8).
+      ttl: 24h
+      purge:
+        # Turns the scheduled purge on; tests turn it off and call the purge directly.
+        enabled: true
+        # How often expired records are deleted (hourly, MVP-ADR-06), and the most rows one DELETE
+        # removes (500 per batch, MVP-ADR-06).
+        interval: 1h
+        batch-size: 500
+  # Risk scoring of transfers (documentations/06 MVP-ADR-24; owner values of 2026-10-30, doc 07
+  # D27), checked at startup (RiskProperties): weights 1-100, band boundaries ascending, weights
+  # growing with the risk, thresholds 1 <= monitor < manual-review < block <= 100. Only the highest
+  # matching weight per rule applies; the score is the sum of the rules' weights, capped at 100.
+  risk:
+    amount:
+      # Each band applies from its min-amount (THB, inclusive) up to the next band's:
+      # 10,000.01-25,000.00 +10, 25,000.01-40,000.00 +20, above 40,000.00 +30. Quoted, so YAML
+      # never reads them as floating-point numbers.
+      bands:
+        - min-amount: "10000.01"
+          weight: 10
+        - min-amount: "25000.01"
+          weight: 20
+        - min-amount: "40000.01"
+          weight: 30
+    frequency:
+      # The sender's assessed transfers in the window, the current one and every outcome included
+      # (blocked, cancelled, and assessments without a transfer). Whole seconds.
+      window: 10m
+      # 3-4 transfers +15, 5-7 +25, 8 or more +35.
+      bands:
+        - min-count: 3
+          weight: 15
+        - min-count: 5
+          weight: 25
+        - min-count: 8
+          weight: 35
+    # First successful transfer from this sender to this recipient.
+    new-recipient:
+      weight: 15
+    # The sender's wallet: less than 24 hours old +20, 24 hours to less than 7 days +10.
+    new-sender-wallet:
+      bands:
+        - younger-than: 24h
+          weight: 20
+        - younger-than: 7d
+          weight: 10
+    # First score of each band: 0-39 ALLOW, 40-69 MONITOR, 70-89 MANUAL_REVIEW, 90-100 BLOCK.
+    thresholds:
+      monitor: 40
+      manual-review: 70
+      block: 90
   # Amount limits in THB (documentations/06 MVP-ADR-18), checked at startup (LimitProperties).
   # Quoted, so YAML never reads them as floating-point numbers.
   limits:
@@ -178,7 +276,10 @@ app:
   rate-limit:
     auth-requests-per-minute-per-ip: 10
     other-requests-per-minute-per-user: 300
-    # Deposits and withdrawals (transfers in PR 5), per customer (doc 02 §1.8).
+    # Money POSTs per customer (doc 02 §1.8): POST /wallet/deposits, POST /wallet/withdrawals and
+    # POST /transfers. POST /transfers/{id}/cancel and the transfer-review actions are not money
+    # POSTs: they count only toward other-requests-per-minute-per-user (owner, 2026-11-06, Q15;
+    # doc 06 MVP-ADR-24 amendment "Rate limit (Q15)"). Paths in common.security.SecurityConfig.
     money-requests-per-minute-per-customer: 30
     # Memory bound per limiter; not a documented value.
     max-tracked-keys: 100000

@@ -455,92 +455,118 @@ class WalletConstraintsIT extends DatabaseIntegrationTest {
     assertThat(stamped).isAfter(times[0].plusNanos(150_000_000));
   }
 
-  // V10 (Y4): idempotency records hold only states the application writes ---------------------
+  // V10 (Y4) and V11 (PR 5 plan Q2): idempotency records hold only states the application writes,
+  // with the same checks on each money module's own table ------------------------------------
 
-  private static Map<String, Object> validIdempotencyRecord() {
+  private static final String[] BAD_REQUEST_HASHES = {
+    "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+    ""
+  };
+
+  private static String idempotencyTable(String module) {
+    return module + ".idempotency_records";
+  }
+
+  private static String idempotencyCheck(String module, String check) {
+    return "ck_" + module + "_idempotency_records_" + check;
+  }
+
+  private static Map<String, Object> validIdempotencyRecord(String module) {
     OffsetDateTime created = OffsetDateTime.now();
     return row(
         "customer_id", UUID.randomUUID(),
-        "operation", "DEPOSIT",
+        "operation", module.equals("wallet") ? "DEPOSIT" : "TRANSFER",
         "idempotency_key", UUID.randomUUID(),
         "request_hash", "0123456789abcdef".repeat(4),
         "created_at", created,
         "expires_at", created.plusDays(1));
   }
 
-  @Test
-  void validIdempotencyRecordStatesAreAccepted() throws SQLException {
-    insert("wallet.idempotency_records", validIdempotencyRecord());
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {"wallet", "transfer"})
+  void validIdempotencyRecordStatesAreAccepted(String module) throws SQLException {
+    insert(idempotencyTable(module), validIdempotencyRecord(module));
     insert(
-        "wallet.idempotency_records",
+        idempotencyTable(module),
         with(
-            with(validIdempotencyRecord(), "response_status", 201),
+            with(validIdempotencyRecord(module), "response_status", 201),
             "response_body",
             jsonb("{\"id\": \"x\"}")));
     insert(
-        "wallet.idempotency_records",
+        idempotencyTable(module),
         with(
-            with(validIdempotencyRecord(), "response_status", 409),
+            with(validIdempotencyRecord(module), "response_status", 409),
             "response_body",
             jsonb("{\"errorCode\": \"INSUFFICIENT_BALANCE\", \"message\": \"m\"}")));
   }
 
+  /** A stored risk block (403 RISK_BLOCKED) is a refusal like the others (PR 5 plan Q3). */
   @Test
-  void anIdempotencyOutcomeHasBothStatusAndBodyOrNeither() {
-    assertCheckViolation(
-        "ck_wallet_idempotency_records_outcome",
-        () ->
-            insert(
-                "wallet.idempotency_records",
-                with(validIdempotencyRecord(), "response_status", 201)));
-    assertCheckViolation(
-        "ck_wallet_idempotency_records_outcome",
-        () ->
-            insert(
-                "wallet.idempotency_records",
-                with(validIdempotencyRecord(), "response_body", jsonb("{}"))));
+  void aStoredRiskBlockIsAcceptedForTransfers() throws SQLException {
+    insert(
+        idempotencyTable("transfer"),
+        with(
+            with(validIdempotencyRecord("transfer"), "response_status", 403),
+            "response_body",
+            jsonb("{\"errorCode\": \"RISK_BLOCKED\", \"message\": \"m\"}")));
   }
 
   @ParameterizedTest(name = "{0}")
-  @ValueSource(ints = {0, 199, 600, -1})
-  void anIdempotencyStatusIsAnHttpStatus(int status) {
+  @ValueSource(strings = {"wallet", "transfer"})
+  void anIdempotencyOutcomeHasBothStatusAndBodyOrNeither(String module) {
     assertCheckViolation(
-        "ck_wallet_idempotency_records_status",
+        idempotencyCheck(module, "outcome"),
         () ->
             insert(
-                "wallet.idempotency_records",
-                with(
-                    with(validIdempotencyRecord(), "response_status", status),
-                    "response_body",
-                    jsonb("{}"))));
+                idempotencyTable(module),
+                with(validIdempotencyRecord(module), "response_status", 201)));
+    assertCheckViolation(
+        idempotencyCheck(module, "outcome"),
+        () ->
+            insert(
+                idempotencyTable(module),
+                with(validIdempotencyRecord(module), "response_body", jsonb("{}"))));
   }
 
   @ParameterizedTest(name = "{0}")
-  @ValueSource(
-      strings = {
-        "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
-        ""
-      })
-  void anIdempotencyRequestHashIsLowerCaseSha256Hex(String hash) {
-    assertCheckViolation(
-        "ck_wallet_idempotency_records_request_hash",
-        () ->
-            insert(
-                "wallet.idempotency_records",
-                with(validIdempotencyRecord(), "request_hash", hash)));
+  @ValueSource(strings = {"wallet", "transfer"})
+  void anIdempotencyStatusIsAnHttpStatus(String module) {
+    for (int status : new int[] {0, 199, 600, -1}) {
+      assertCheckViolation(
+          idempotencyCheck(module, "status"),
+          () ->
+              insert(
+                  idempotencyTable(module),
+                  with(
+                      with(validIdempotencyRecord(module), "response_status", status),
+                      "response_body",
+                      jsonb("{}"))));
+    }
   }
 
-  @Test
-  void anIdempotencyRecordExpiresAfterItWasCreated() {
-    Map<String, Object> record = validIdempotencyRecord();
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {"wallet", "transfer"})
+  void anIdempotencyRequestHashIsLowerCaseSha256Hex(String module) {
+    for (String hash : BAD_REQUEST_HASHES) {
+      assertCheckViolation(
+          idempotencyCheck(module, "request_hash"),
+          () ->
+              insert(
+                  idempotencyTable(module),
+                  with(validIdempotencyRecord(module), "request_hash", hash)));
+    }
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {"wallet", "transfer"})
+  void anIdempotencyRecordExpiresAfterItWasCreated(String module) {
+    Map<String, Object> record = validIdempotencyRecord(module);
     assertCheckViolation(
-        "ck_wallet_idempotency_records_expiry",
+        idempotencyCheck(module, "expiry"),
         () ->
-            insert(
-                "wallet.idempotency_records",
-                with(record, "expires_at", record.get("created_at"))));
+            insert(idempotencyTable(module), with(record, "expires_at", record.get("created_at"))));
   }
 
   private static org.postgresql.util.PGobject jsonb(String json) {

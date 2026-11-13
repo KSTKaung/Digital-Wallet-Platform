@@ -45,6 +45,9 @@ class WalletLookupEdgeIT extends MoneyFlowSupport {
   @org.springframework.beans.factory.annotation.Autowired
   org.springframework.transaction.PlatformTransactionManager transactionManager;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  com.portfolio.wallet.common.database.TransactionTimeouts timeouts;
+
   private static String randomIp() {
     ThreadLocalRandom random = ThreadLocalRandom.current();
     return "10." + random.nextInt(256) + "." + random.nextInt(256) + "." + random.nextInt(1, 255);
@@ -290,7 +293,8 @@ class WalletLookupEdgeIT extends MoneyFlowSupport {
                 java.time.Duration.ofMinutes(1),
                 new com.portfolio.wallet.wallet.application.LookupProperties.Purge(
                     false, java.time.Duration.ofHours(1), 10)),
-            transactionManager);
+            transactionManager,
+            timeouts);
     withTriggersDisabled(
         superuser ->
             update(

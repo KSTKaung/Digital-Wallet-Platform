@@ -113,7 +113,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
   void transferLeavingReviewUnapprovedCannotBePosted(String status) throws SQLException {
     UUID transfer =
         "EXPIRED".equals(status) ? newOverdueHeldTransfer() : newTransfer("PENDING_REVIEW");
-    String category = "REJECTED".equals(status) ? "'REVIEW'" : "NULL";
+    String category = "REJECTED".equals(status) ? "'REVIEW_DECLINED'" : "NULL";
 
     assertCheckViolation(
         "ck_transfers_completed_posted",
@@ -135,7 +135,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
         with(
             with(validTransfer(status), "decided_at", OffsetDateTime.now(ZoneOffset.UTC)),
             "rejection_reason_category",
-            "REJECTED".equals(status) ? "REVIEW" : null);
+            "REJECTED".equals(status) ? "REVIEW_DECLINED" : null);
 
     assertCheckViolation("ck_transfers_left_review_decided", () -> insert(TRANSFERS, decided));
   }
@@ -151,13 +151,84 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
                 "UPDATE transfer.transfers SET status = 'REJECTED' WHERE id = ?", transfer));
   }
 
+  /** V11 (D1): a staff rejection and a system rejection each have their own category (Q10). */
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {"REVIEW_DECLINED", "WALLET_UNAVAILABLE"})
+  void aRejectionCarriesOneOfTheTwoCustomerCategories(String category) throws SQLException {
+    UUID transfer = newTransfer("PENDING_REVIEW");
+
+    jdbc.update(
+        "UPDATE transfer.transfers SET status = 'REJECTED', rejection_reason_category = ?"
+            + " WHERE id = ?",
+        category,
+        transfer);
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT rejection_reason_category FROM transfer.transfers WHERE id = ?",
+                String.class,
+                transfer))
+        .isEqualTo(category);
+  }
+
+  /**
+   * V11 (D1): nothing else reaches the column a customer reads: no rule code, no reviewer text, no
+   * other spelling (MVP-ADR-24).
+   */
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "NEW_RECIPIENT",
+        "TRANSFER_AMOUNT",
+        "review_declined",
+        "REVIEW",
+        "Suspicious",
+        " ",
+        // The risk-side values that sit next to this column in the code: a staff category, a
+        // system reason that names whose wallet, the deadline reason.
+        "STAFF_REJECTION",
+        "SENDER_WALLET_FROZEN",
+        "REVIEW_DEADLINE_PASSED"
+      })
+  void anyOtherRejectionCategoryIsRefused(String category) throws SQLException {
+    UUID transfer = newTransfer("PENDING_REVIEW");
+
+    assertCheckViolation(
+        "ck_transfers_rejection_reason_category",
+        () ->
+            jdbc.update(
+                "UPDATE transfer.transfers SET status = 'REJECTED', rejection_reason_category = ?"
+                    + " WHERE id = ?",
+                category,
+                transfer));
+  }
+
+  /** V11 (D1): one risk assessment authorises at most one transfer. */
+  @Test
+  void anAssessmentBacksOnlyOneTransfer() throws SQLException {
+    Map<String, Object> first = validTransfer("COMPLETED");
+    insert(TRANSFERS, first);
+
+    assertUniqueViolation(
+        "uq_transfers_risk_assessment",
+        () ->
+            insert(
+                TRANSFERS,
+                with(
+                    validTransfer("COMPLETED"),
+                    "risk_assessment_id",
+                    first.get("risk_assessment_id"))));
+  }
+
   @ParameterizedTest(name = "{0}")
   @ValueSource(strings = {"COMPLETED", "BLOCKED"})
   void transferCreatedWithoutReviewCannotHaveACategory(String status) {
     assertCheckViolation(
         "ck_transfers_rejected_category",
         () ->
-            insert(TRANSFERS, with(validTransfer(status), "rejection_reason_category", "REVIEW")));
+            insert(
+                TRANSFERS,
+                with(validTransfer(status), "rejection_reason_category", "REVIEW_DECLINED")));
   }
 
   @Test
@@ -169,7 +240,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
         () ->
             jdbc.update(
                 "UPDATE transfer.transfers SET status = 'COMPLETED', ledger_status = 'POSTED',"
-                    + " rejection_reason_category = 'REVIEW' WHERE id = ?",
+                    + " rejection_reason_category = 'REVIEW_DECLINED' WHERE id = ?",
                 transfer));
   }
 
@@ -183,7 +254,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
         "ck_transfers_rejected_category",
         () ->
             jdbc.update(
-                "UPDATE transfer.transfers SET status = ?, rejection_reason_category = 'REVIEW'"
+                "UPDATE transfer.transfers SET status = ?, rejection_reason_category = 'REVIEW_DECLINED'"
                     + " WHERE id = ?",
                 status,
                 transfer));
@@ -266,7 +337,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
     assertThat(
             jdbc.update(
                 "UPDATE transfer.transfers SET status = 'REJECTED', decided_at = now(),"
-                    + " rejection_reason_category = 'REVIEW', version = version + 1"
+                    + " rejection_reason_category = 'REVIEW_DECLINED', version = version + 1"
                     + " WHERE id = ?",
                 transfer))
         .isEqualTo(1);
@@ -319,7 +390,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
         jdbc.update(
             "UPDATE transfer.transfers SET status = ?, rejection_reason_category = ? WHERE id = ?",
             status,
-            "REJECTED".equals(status) ? "REVIEW" : null,
+            "REJECTED".equals(status) ? "REVIEW_DECLINED" : null,
             transfer);
         return transfer;
       }
@@ -466,7 +537,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
     String complete =
         "UPDATE transfer.transfers SET status = 'COMPLETED', ledger_status = 'POSTED' WHERE id = ?";
     String reject =
-        "UPDATE transfer.transfers SET status = 'REJECTED', rejection_reason_category = 'REVIEW'"
+        "UPDATE transfer.transfers SET status = 'REJECTED', rejection_reason_category = 'REVIEW_DECLINED'"
             + " WHERE id = ?";
     String cancel = "UPDATE transfer.transfers SET status = 'CANCELLED' WHERE id = ?";
     String expire = "UPDATE transfer.transfers SET status = 'EXPIRED' WHERE id = ?";
@@ -535,7 +606,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
   static Stream<Arguments> decisionColumns() {
     return Stream.of(
         Arguments.of("decided_at", OffsetDateTime.now(ZoneOffset.UTC)),
-        Arguments.of("rejection_reason_category", "REVIEW"));
+        Arguments.of("rejection_reason_category", "REVIEW_DECLINED"));
   }
 
   @Test
@@ -545,7 +616,10 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
         () ->
             insert(
                 TRANSFERS,
-                with(validTransfer("PENDING_REVIEW"), "rejection_reason_category", "REVIEW")));
+                with(
+                    validTransfer("PENDING_REVIEW"),
+                    "rejection_reason_category",
+                    "REVIEW_DECLINED")));
   }
 
   // Timestamps set by the database at insert and when a transfer leaves review -----------------
@@ -597,7 +671,8 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
   static Stream<Arguments> leavingReview() {
     return Stream.of(
         Arguments.of("COMPLETED", "status = 'COMPLETED', ledger_status = 'POSTED'"),
-        Arguments.of("REJECTED", "status = 'REJECTED', rejection_reason_category = 'REVIEW'"),
+        Arguments.of(
+            "REJECTED", "status = 'REJECTED', rejection_reason_category = 'REVIEW_DECLINED'"),
         Arguments.of("CANCELLED", "status = 'CANCELLED'"));
   }
 
@@ -774,7 +849,7 @@ class TransferConstraintsIT extends DatabaseIntegrationTest {
           update(
               c,
               "UPDATE transfer.transfers SET status = 'REJECTED',"
-                  + " rejection_reason_category = 'REVIEW', updated_at = ? WHERE id = ?",
+                  + " rejection_reason_category = 'REVIEW_DECLINED', updated_at = ? WHERE id = ?",
               backdated,
               transfer.get("id"));
         });

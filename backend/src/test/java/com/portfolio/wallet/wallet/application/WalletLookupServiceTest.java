@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.portfolio.wallet.audit.application.AuditEntry;
 import com.portfolio.wallet.audit.application.AuditResult;
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.error.RateLimitedException;
@@ -50,6 +51,7 @@ class WalletLookupServiceTest {
   private final RecipientNames names = mock(RecipientNames.class);
   private final AuditService audit = mock(AuditService.class);
   private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+  private final TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
 
   private final WalletLookupService service =
       new WalletLookupService(
@@ -62,7 +64,8 @@ class WalletLookupServiceTest {
               30,
               Duration.ofMinutes(1),
               new LookupProperties.Purge(true, Duration.ofHours(1), 100)),
-          transactions);
+          transactions,
+          timeouts);
 
   private static WalletRow wallet(UUID id, UUID customer, String number, String status) {
     return new WalletRow(
@@ -117,6 +120,16 @@ class WalletLookupServiceTest {
     assertThat(entry.getValue().result()).isEqualTo(AuditResult.SUCCESS);
     assertThat(entry.getValue().resourceId()).isEqualTo(TARGET_WALLET.toString());
     assertThat(entry.getValue().newValue()).doesNotContainValue(TARGET_NUMBER);
+  }
+
+  /** Doc 07 D14 open risk Z1: the timeouts are set before the advisory locks are taken. */
+  @Test
+  void theTimeoutsAreSetBeforeTheAdvisoryLocks() {
+    service.lookup(CALLER, TARGET_NUMBER, IP);
+
+    InOrder order = inOrder(timeouts, attempts);
+    order.verify(timeouts).apply();
+    order.verify(attempts).lockKeys(CALLER, IP);
   }
 
   @Test
@@ -304,5 +317,117 @@ class WalletLookupServiceTest {
         .thenReturn(2)
         .thenThrow(new org.springframework.dao.QueryTimeoutException("timeout"));
     assertThat(purge.purgeExpired()).isEqualTo(2);
+  }
+
+  // The recipient step of POST /transfers (doc 08 §4C.2 Q3 step 3, Q5) ------------------------
+
+  @Test
+  void aFoundTransferRecipientIsLimitedButNeitherCountedNorAudited() {
+    TransferRecipient recipient = service.resolveTransferRecipient(CALLER, TARGET_NUMBER, IP);
+
+    assertThat(recipient.walletId()).isEqualTo(TARGET_WALLET);
+    assertThat(recipient.customerId()).isEqualTo(TARGET_CUSTOMER);
+    assertThat(recipient.maskedName()).isEqualTo("Somchai J.");
+    assertThat(recipient.maskedWalletNumber()).isEqualTo("*******" + TARGET_NUMBER.substring(7));
+    assertThat(recipient.toString()).doesNotContain(TARGET_WALLET.toString());
+    // The same locks and window check as a lookup, first.
+    InOrder order = inOrder(timeouts, attempts, wallets);
+    order.verify(timeouts).apply();
+    order.verify(attempts).lockKeys(CALLER, IP);
+    order.verify(attempts).countForUser(CALLER, 60);
+    order.verify(attempts).countForIp(IP, 60);
+    order.verify(wallets).findByWalletNumber(TARGET_NUMBER);
+    verify(attempts, never()).insert(any(), any());
+    verifyNoInteractions(audit);
+  }
+
+  @Test
+  void aTransferToTheSendersOwnWalletIsSelfTransferAfterTheNotFoundCasesAndNotCounted() {
+    when(wallets.findByWalletNumber(CALLER_NUMBER))
+        .thenReturn(Optional.of(wallet(UUID.randomUUID(), CALLER, CALLER_NUMBER, "ACTIVE")));
+
+    assertCode(
+        () -> service.resolveTransferRecipient(CALLER, CALLER_NUMBER, IP), ErrorCode.SELF_TRANSFER);
+    verify(attempts, never()).insert(any(), any());
+    verifyNoInteractions(audit);
+
+    // The sender's own wallet, frozen, is one of the 404 cases (checked first), and counts.
+    when(wallets.findByWalletNumber(CALLER_NUMBER))
+        .thenReturn(Optional.of(wallet(UUID.randomUUID(), CALLER, CALLER_NUMBER, "FROZEN")));
+    assertCode(
+        () -> service.resolveTransferRecipient(CALLER, CALLER_NUMBER, IP), ErrorCode.NOT_FOUND);
+    verify(attempts).insert(CALLER, IP);
+  }
+
+  @Test
+  void anIneligibleTransferRecipientIsCountedAuditedAndTheIdenticalNotFound() {
+    String frozen = new WalletNumberGenerator().next().value();
+    when(wallets.findByWalletNumber(frozen))
+        .thenReturn(Optional.of(wallet(UUID.randomUUID(), UUID.randomUUID(), frozen, "FROZEN")));
+    String nameless = new WalletNumberGenerator().next().value();
+    when(wallets.findByWalletNumber(nameless))
+        .thenReturn(Optional.of(wallet(UUID.randomUUID(), UUID.randomUUID(), nameless, "ACTIVE")));
+    String wrongDigit =
+        TARGET_NUMBER.substring(0, 10) + (char) ('0' + (TARGET_NUMBER.charAt(10) - '0' + 1) % 10);
+
+    for (String number : new String[] {frozen, nameless, wrongDigit, "00000000000"}) {
+      assertThatThrownBy(() -> service.resolveTransferRecipient(CALLER, number, IP))
+          .isInstanceOfSatisfying(
+              ApiException.class,
+              e -> assertThat(e.getMessage()).isEqualTo(ApiException.notFound().getMessage()));
+    }
+    verify(attempts, org.mockito.Mockito.times(4)).insert(CALLER, IP);
+    ArgumentCaptor<AuditEntry> entries = ArgumentCaptor.forClass(AuditEntry.class);
+    verify(audit, org.mockito.Mockito.times(4)).record(entries.capture());
+    assertThat(entries.getAllValues())
+        .allSatisfy(
+            entry -> {
+              assertThat(entry.action()).isEqualTo("WALLET_LOOKUP");
+              assertThat(entry.result()).isEqualTo(AuditResult.FAILURE);
+              assertThat(entry.newValue()).containsEntry("outcome", "NOT_FOUND");
+            });
+    verify(wallets, never()).findByWalletNumber(wrongDigit);
+    // The attempt is recorded after the window counts (Y1: its stamp follows the lock wait).
+    InOrder order = inOrder(attempts);
+    order.verify(attempts).countForIp(IP, 60);
+    order.verify(attempts).insert(CALLER, IP);
+  }
+
+  @Test
+  void aFrozenSenderIsResolvedButNeedsAWalletAndAValidFormat() {
+    when(wallets.findByCustomer(CALLER))
+        .thenReturn(Optional.of(wallet(UUID.randomUUID(), CALLER, CALLER_NUMBER, "FROZEN")));
+    assertThat(service.resolveTransferRecipient(CALLER, TARGET_NUMBER, IP).walletId())
+        .isEqualTo(TARGET_WALLET);
+
+    org.mockito.Mockito.clearInvocations(attempts, audit);
+    assertThatThrownBy(() -> service.resolveTransferRecipient(CALLER, "123", IP))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            e -> {
+              assertThat(e.errorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+              assertThat(e.getMessage()).isEqualTo("receiverWalletNumber: must be 11 digits");
+            });
+    when(wallets.findByCustomer(CALLER)).thenReturn(Optional.empty());
+    assertCode(
+        () -> service.resolveTransferRecipient(CALLER, TARGET_NUMBER, IP), ErrorCode.KYC_REQUIRED);
+    verifyNoInteractions(attempts, audit);
+  }
+
+  /** The limit applies to every resolution, found or not, so a 429 discloses nothing. */
+  @Test
+  void overEitherWindowEveryTransferResolutionIs429AndNothingIsRecorded() {
+    when(wallets.findByWalletNumber(CALLER_NUMBER))
+        .thenReturn(Optional.of(wallet(UUID.randomUUID(), CALLER, CALLER_NUMBER, "ACTIVE")));
+    for (int[] counts : new int[][] {{10, 0}, {0, 30}}) {
+      counts(counts[0], counts[1]);
+      for (String number : new String[] {TARGET_NUMBER, CALLER_NUMBER, "00000000000"}) {
+        assertThatThrownBy(() -> service.resolveTransferRecipient(CALLER, number, IP))
+            .isInstanceOf(RateLimitedException.class);
+      }
+    }
+    verify(attempts, never()).insert(any(), any());
+    verify(wallets, never()).findByWalletNumber(any());
+    verifyNoInteractions(audit);
   }
 }

@@ -12,6 +12,9 @@ import com.portfolio.wallet.common.money.InvalidAmountException;
 import com.portfolio.wallet.common.money.Money;
 import com.portfolio.wallet.common.time.BusinessTimeProperties;
 import com.portfolio.wallet.ledger.application.LedgerPostingService;
+import com.portfolio.wallet.notification.application.EmailKind;
+import com.portfolio.wallet.notification.application.MoneyEmailValues;
+import com.portfolio.wallet.notification.application.NotificationOutbox;
 import com.portfolio.wallet.wallet.domain.BusinessDay;
 import com.portfolio.wallet.wallet.domain.InsufficientBalanceException;
 import com.portfolio.wallet.wallet.domain.LimitPolicy;
@@ -82,8 +85,12 @@ import tools.jackson.databind.json.JsonMapper;
  * ledgerStatus = POSTED}, reaches the caller only after the commit.
  *
  * <p>Under the row locks the {@code version} cannot have moved; a mismatch means a code path
- * skipped the lock, so the movement fails with a server error and is not retried (doc 07 §8). No
- * email is sent (owner, 2026-11-04: transaction emails come in PR 5). Nothing here is logged.
+ * skipped the lock, so the movement fails with a server error and is not retried (doc 07 §8).
+ *
+ * <p>A completed movement writes a {@code DEPOSIT_COMPLETED} or {@code WITHDRAWAL_COMPLETED} outbox
+ * row for the customer in the same transaction (doc 08 §4C.2 Q9; MVP-ADR-25): amount, currency and
+ * server reference only, sent after the commit. A refusal, a replay (in the key's window or after
+ * it, Q14), a {@code 409} and a rollback write none. Nothing here is logged.
  */
 @Service
 public class MoneyMovementService {
@@ -116,6 +123,7 @@ public class MoneyMovementService {
   private final BusinessDay businessDay;
   private final Clock clock;
   private final JsonMapper json;
+  private final NotificationOutbox outbox;
 
   public MoneyMovementService(
       WalletRepository wallets,
@@ -127,7 +135,8 @@ public class MoneyMovementService {
       LimitPolicy limits,
       BusinessTimeProperties businessTime,
       Clock clock,
-      JsonMapper json) {
+      JsonMapper json,
+      NotificationOutbox outbox) {
     this.wallets = wallets;
     this.usages = usages;
     this.movements = movements;
@@ -138,6 +147,7 @@ public class MoneyMovementService {
     this.businessDay = new BusinessDay(businessTime.businessZone());
     this.clock = clock;
     this.json = json;
+    this.outbox = Objects.requireNonNull(outbox, "outbox");
   }
 
   /**
@@ -304,6 +314,10 @@ public class MoneyMovementService {
             CorrelationId.current().orElse(null));
     movements.insert(kind.table, row, kind == Kind.DEPOSIT ? note : null);
     audit.record(auditEntry(kind, row, before, wallet, ledgerTransactionId, clientIp));
+    // Q9: written in this transaction, sent after the commit (MVP-ADR-25); the customer id is the
+    // auth user id (usr.customers.user_id), and no address is looked up under the wallet lock.
+    outbox.enqueue(
+        customerId, kind.email, MoneyEmailValues.of(row.amount(), row.currency(), row.reference()));
     return response(view(row, wallet.walletNumber().value()));
   }
 
@@ -388,17 +402,19 @@ public class MoneyMovementService {
   }
 
   private enum Kind {
-    DEPOSIT(Operation.DEPOSIT, Table.DEPOSITS, "DEP-"),
-    WITHDRAWAL(Operation.WITHDRAWAL, Table.WITHDRAWALS, "WDR-");
+    DEPOSIT(Operation.DEPOSIT, Table.DEPOSITS, "DEP-", EmailKind.DEPOSIT_COMPLETED),
+    WITHDRAWAL(Operation.WITHDRAWAL, Table.WITHDRAWALS, "WDR-", EmailKind.WITHDRAWAL_COMPLETED);
 
     private final Operation operation;
     private final Table table;
     private final String prefix;
+    private final EmailKind email;
 
-    Kind(Operation operation, Table table, String prefix) {
+    Kind(Operation operation, Table table, String prefix, EmailKind email) {
       this.operation = operation;
       this.table = table;
       this.prefix = prefix;
+      this.email = email;
     }
 
     /** {@code DEP-} or {@code WDR-} and 32 hex digits: 36 characters, within V3's 40. */

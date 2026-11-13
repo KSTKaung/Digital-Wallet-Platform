@@ -33,16 +33,13 @@ import java.util.UUID;
  */
 public final class Transfer {
 
-  /** Maximum rejection reason category length (V4 {@code varchar(40)}). */
-  public static final int MAX_REASON_CATEGORY_LENGTH = 40;
-
   private final TransferDetails details;
   private final Instant heldAt;
   private final Instant reviewExpiresAt;
   private final long version;
   private TransferStatus status;
   private Instant decidedAt;
-  private String rejectionReasonCategory;
+  private RejectionCategory rejectionReasonCategory;
 
   private Transfer(
       TransferDetails details,
@@ -50,7 +47,7 @@ public final class Transfer {
       Instant heldAt,
       Instant reviewExpiresAt,
       Instant decidedAt,
-      String rejectionReasonCategory,
+      RejectionCategory rejectionReasonCategory,
       long version) {
     this.details = Objects.requireNonNull(details, "details");
     this.status = Objects.requireNonNull(status, "status");
@@ -65,6 +62,10 @@ public final class Transfer {
     }
     if (version < 0) {
       throw new IllegalArgumentException("version must not be negative");
+    }
+    // V4 ck_transfers_rejected_category: a category exactly when REJECTED.
+    if ((status == TransferStatus.REJECTED) != (rejectionReasonCategory != null)) {
+      throw new IllegalArgumentException("a rejection category goes exactly with REJECTED");
     }
     this.heldAt = heldAt;
     this.reviewExpiresAt = reviewExpiresAt;
@@ -105,7 +106,7 @@ public final class Transfer {
       Instant heldAt,
       Instant reviewExpiresAt,
       Instant decidedAt,
-      String rejectionReasonCategory,
+      RejectionCategory rejectionReasonCategory,
       long version) {
     return new Transfer(
         details, status, heldAt, reviewExpiresAt, decidedAt, rejectionReasonCategory, version);
@@ -121,13 +122,12 @@ public final class Transfer {
    * Reviewer rejection, or an approval that found a frozen or closed wallet: {@code PENDING_REVIEW}
    * → {@code REJECTED}, before the deadline (MVP-ADR-24).
    *
-   * @param reasonCategory generic category shown to the customer, never rule details
+   * @param reasonCategory the generic category shown to the customer, never rule details or the
+   *     reviewer's reason (MVP-ADR-24 Q10): one of the two values V11 accepts, so a wrong value is
+   *     refused here and not only by the database (doc 08 §5, V11 review)
    */
-  public void reject(Instant now, String reasonCategory) {
+  public void reject(Instant now, RejectionCategory reasonCategory) {
     Objects.requireNonNull(reasonCategory, "reasonCategory");
-    if (reasonCategory.isBlank() || reasonCategory.length() > MAX_REASON_CATEGORY_LENGTH) {
-      throw new IllegalArgumentException("reasonCategory must be 1 to 40 characters");
-    }
     requireOpenReview(now);
     decide(TransferStatus.REJECTED, now);
     rejectionReasonCategory = reasonCategory;
@@ -202,7 +202,7 @@ public final class Transfer {
     return Optional.ofNullable(decidedAt);
   }
 
-  public Optional<String> rejectionReasonCategory() {
+  public Optional<RejectionCategory> rejectionReasonCategory() {
     return Optional.ofNullable(rejectionReasonCategory);
   }
 

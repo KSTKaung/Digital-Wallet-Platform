@@ -1,0 +1,20 @@
+package com.portfolio.wallet.common.idempotency;
+
+import java.util.Objects;
+
+/**
+ * The success response of a money operation, as stored on its idempotency record and replayed.
+ *
+ * @param status a 2xx HTTP status, such as 201
+ * @param jsonBody the response body as JSON. Stored as {@code jsonb}, which keeps the content but
+ *     not key order or whitespace: a replay should read it back into the response type
+ */
+public record StoredResponse(int status, String jsonBody) {
+
+  public StoredResponse {
+    if (status < 200 || status > 299) {
+      throw new IllegalArgumentException("a stored success response needs a 2xx status");
+    }
+    Objects.requireNonNull(jsonBody, "jsonBody");
+  }
+}

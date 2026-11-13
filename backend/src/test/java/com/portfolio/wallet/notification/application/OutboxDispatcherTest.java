@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,7 +95,7 @@ class OutboxDispatcherTest {
   }
 
   private OutboxRow claimed(int claim, String kind) {
-    return new OutboxRow(UUID.randomUUID(), user, kind, claim, OCCURRED);
+    return new OutboxRow(UUID.randomUUID(), user, kind, claim, OCCURRED, Map.of());
   }
 
   private void claimable(OutboxRow row) {
@@ -392,11 +393,52 @@ class OutboxDispatcherTest {
     assertThat(dispatcher.dispatchDue()).isEqualTo(properties.batchSize());
   }
 
+  /** Q9: a money email is rendered with its stored values. */
+  @Test
+  void aMoneyEmailIsSentWithItsStoredValues() {
+    OutboxRow row =
+        new OutboxRow(
+            UUID.randomUUID(),
+            user,
+            "TRANSFER_SENT",
+            1,
+            OCCURRED,
+            Map.of("amount", "1300.00", "currency", "THB", "reference", "TRF-ABC123"));
+    claimable(row);
+
+    assertThat(dispatcher.dispatch(row.eventId())).isTrue();
+
+    assertThat(sender.messages())
+        .singleElement()
+        .satisfies(message -> assertThat(message.body()).contains("1,300.00 THB", "TRF-ABC123"));
+    verify(notifications).markSent(row.eventId(), 1);
+  }
+
+  /** Stored values that cannot be read, or that do not match the kind, fail only that attempt. */
+  @Test
+  void unreadableOrMismatchedValuesFailTheAttemptAndAreRetried() {
+    OutboxRow unreadable =
+        new OutboxRow(UUID.randomUUID(), user, "TRANSFER_SENT", 1, OCCURRED, null);
+    OutboxRow mismatched = claimed(1, "TRANSFER_SENT");
+    claimable(unreadable);
+    claimable(mismatched);
+
+    assertThat(dispatcher.dispatch(unreadable.eventId())).isTrue();
+    assertThat(dispatcher.dispatch(mismatched.eventId())).isTrue();
+
+    assertThat(sender.messages()).isEmpty();
+    verify(notifications)
+        .scheduleRetry(
+            eq(unreadable.eventId()), eq(1), any(), eq(OutboxDispatcher.UNREADABLE_VALUES));
+    verify(notifications)
+        .scheduleRetry(eq(mismatched.eventId()), eq(1), any(), eq("IllegalArgumentException"));
+  }
+
   /** Per-row failures do not stop the run: each row fails its attempt and the next is handled. */
   @Test
   void aRowThatFailsDoesNotHoldBackTheNextOne() {
     OutboxRow broken =
-        new OutboxRow(UUID.randomUUID(), UUID.randomUUID(), "KYC_REJECTED", 1, OCCURRED);
+        new OutboxRow(UUID.randomUUID(), UUID.randomUUID(), "KYC_REJECTED", 1, OCCURRED, Map.of());
     OutboxRow good = claimed(1);
     when(recipients.emailOf(broken.userId(), LOOKUP))
         .thenThrow(new DataAccessResourceFailureException("db"));

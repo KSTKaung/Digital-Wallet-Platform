@@ -18,6 +18,7 @@ import com.portfolio.wallet.audit.application.ActorType;
 import com.portfolio.wallet.audit.application.AuditEntry;
 import com.portfolio.wallet.audit.application.AuditResult;
 import com.portfolio.wallet.audit.application.AuditService;
+import com.portfolio.wallet.common.database.TransactionTimeouts;
 import com.portfolio.wallet.common.error.ApiException;
 import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.ledger.application.LedgerAccountService;
@@ -49,9 +50,34 @@ class WalletStatusServiceTest {
   private final LedgerAccountService ledger = mock(LedgerAccountService.class);
   private final AuditService audit = mock(AuditService.class);
   private final NotificationOutbox outbox = mock(NotificationOutbox.class);
+  private final TransactionTimeouts timeouts = mock(TransactionTimeouts.class);
   private final WalletStatusService service =
-      new WalletStatusService(repository, ledger, audit, outbox);
+      new WalletStatusService(repository, ledger, audit, outbox, timeouts);
   private InetAddress ip;
+
+  @Test
+  void theD14TimeoutsAreSetBeforeTheWalletIsLocked() {
+    stored("ACTIVE");
+
+    service.freezeOwn(CUSTOMER, ip);
+    service.freezeByStaff(ADMIN, CUSTOMER, "Suspicious activity", ip);
+    service.unfreezeByStaff(ADMIN, CUSTOMER, "Cleared", ip);
+
+    InOrder order = inOrder(timeouts, repository);
+    for (int i = 0; i < 3; i++) {
+      order.verify(timeouts).apply();
+      order.verify(repository).findByCustomerForUpdate(CUSTOMER);
+    }
+  }
+
+  @Test
+  void aTimeoutsFailureLocksNothing() {
+    doThrow(new IllegalStateException("outside a transaction")).when(timeouts).apply();
+
+    assertThatThrownBy(() -> service.freezeOwn(CUSTOMER, ip))
+        .isInstanceOf(IllegalStateException.class);
+    verifyNoInteractions(repository, ledger, audit, outbox);
+  }
 
   @BeforeEach
   void setUp() throws Exception {

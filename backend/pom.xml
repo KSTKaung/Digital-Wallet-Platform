@@ -174,8 +174,10 @@
             </goals>
           </execution>
           <!-- Coverage gate (CLAUDE.md): at least 80% line coverage from unit tests on the domain
-               packages, common.money and the application packages that have code so far. Further
-               application packages are added when they get code. -->
+               packages, common.money, common.idempotency, common.fingerprint, common.text,
+               common.database and the
+               application packages that have code so far. Further application packages are added
+               when they get code. -->
           <execution>
             <id>coverage-gate</id>
             <phase>verify</phase>
@@ -189,12 +191,18 @@
                   <includes>
                     <include>com.portfolio.wallet.*.domain</include>
                     <include>com.portfolio.wallet.common.money</include>
+                    <include>com.portfolio.wallet.common.idempotency</include>
+                    <include>com.portfolio.wallet.common.fingerprint</include>
+                    <include>com.portfolio.wallet.common.text</include>
+                    <include>com.portfolio.wallet.common.database</include>
                     <include>com.portfolio.wallet.audit.application</include>
                     <include>com.portfolio.wallet.notification.application</include>
                     <include>com.portfolio.wallet.auth.application</include>
                     <include>com.portfolio.wallet.user.application</include>
                     <include>com.portfolio.wallet.wallet.application</include>
                     <include>com.portfolio.wallet.ledger.application</include>
+                    <include>com.portfolio.wallet.transfer.application</include>
+                    <include>com.portfolio.wallet.risk.application</include>
                   </includes>
                   <limits>
                     <limit>

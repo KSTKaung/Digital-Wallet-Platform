@@ -1,9 +1,11 @@
 package com.portfolio.wallet.wallet.persistence;
 
+import com.portfolio.wallet.common.idempotency.IdempotencyRecord;
 import java.time.Instant;
 
 /**
- * One row of {@code wallet.idempotency_records} (V3), as read under its row lock.
+ * One row of {@code wallet.idempotency_records} (V3), as read under its row lock (or without one,
+ * for the engine's early replay); the wallet's {@link IdempotencyRecord}.
  *
  * @param responseStatus null while the money transaction that inserted the row is still open; a
  *     committed row always has it, because the outcome is stored in the same transaction
@@ -18,4 +20,5 @@ public record IdempotencyRecordRow(
     String responseBody,
     String errorCode,
     String errorMessage,
-    Instant expiresAt) {}
+    Instant expiresAt)
+    implements IdempotencyRecord {}

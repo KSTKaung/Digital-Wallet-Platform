@@ -34,11 +34,12 @@ public class NotificationOutbox {
    * Must run inside the caller's business transaction; without one it throws.
    *
    * @param userId the recipient's auth user id
-   * @param kind a business email kind (KYC decision, wallet freeze or unfreeze)
-   * @param values the template values; only the keys the kind declares (none today)
+   * @param kind a business email kind (KYC decision, wallet freeze or unfreeze, money emails)
+   * @param values the template values: exactly the keys the kind declares (none for the KYC and
+   *     wallet status kinds; {@link MoneyEmailValues} for the money kinds)
    * @return the new row's event id, unique and stable
    * @throws IllegalArgumentException for a kind that is not sent through the outbox, or an
-   *     undeclared value
+   *     undeclared, missing or null value
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public UUID enqueue(UUID userId, EmailKind kind, Map<String, String> values) {
@@ -55,6 +56,10 @@ public class NotificationOutbox {
             throw new IllegalArgumentException(kind + " does not take the value " + key);
           }
         });
+    // Every declared value, so a row can always be rendered when it is sent.
+    if (!values.keySet().containsAll(accepted)) {
+      throw new IllegalArgumentException(kind + " needs the values " + accepted);
+    }
     UUID eventId = UUID.randomUUID();
     // Due at once, by the application clock that the dispatcher compares with (N2).
     notifications.insert(eventId, userId, kind.name(), Map.copyOf(values), clock.instant());

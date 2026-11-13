@@ -10,10 +10,14 @@ import static org.mockito.Mockito.doThrow;
 import com.portfolio.wallet.notification.persistence.NotificationRepository;
 import com.portfolio.wallet.support.DatabaseIntegrationTest;
 import com.portfolio.wallet.support.MutableClock;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +30,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -193,6 +198,52 @@ class NotificationOutboxIT extends DatabaseIntegrationTest {
         .isZero();
     dispatcher.dispatchDue();
     assertThat(mailTo(user.get("email"))).isEmpty();
+  }
+
+  /**
+   * A stored payload that is not an object of strings (written past the outbox, here as the owner
+   * role) is read by the real repository without failing the claim: that row's attempt fails with
+   * {@code UnreadableValues}, and the next row is still sent in the same run (MVP-ADR-25).
+   */
+  @Test
+  void aPayloadWithANonStringValueFailsOnlyItsAttemptAndTheNextRowIsSent() throws Exception {
+    Map<String, Object> user = account();
+    UUID userId = (UUID) user.get("id");
+    UUID unreadable = UUID.randomUUID();
+    UUID readable = UUID.randomUUID();
+    // Due long before every other row, so this run claims these two first.
+    OffsetDateTime due =
+        OffsetDateTime.of(1971, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC)
+            .plusSeconds(ThreadLocalRandom.current().nextInt(1_000_000));
+    try (Connection owner = ownerDataSource().getConnection();
+        PreparedStatement statement =
+            owner.prepareStatement(
+                "INSERT INTO notification.notifications"
+                    + " (event_id, user_id, kind, payload, next_attempt_at)"
+                    + " VALUES (?, ?, 'TRANSFER_SENT', CAST(? AS jsonb), ?)")) {
+      statement.setObject(1, unreadable);
+      statement.setObject(2, userId);
+      statement.setString(3, "{\"amount\": 1, \"currency\": \"THB\", \"reference\": \"TRF-ABC1\"}");
+      statement.setObject(4, due);
+      statement.executeUpdate();
+      statement.setObject(1, readable);
+      statement.setObject(2, userId);
+      statement.setString(
+          3, "{\"amount\": \"7.00\", \"currency\": \"THB\", \"reference\": \"TRF-ABC2\"}");
+      statement.setObject(4, due.plusSeconds(1));
+      statement.executeUpdate();
+    }
+
+    dispatcher.dispatchDue();
+
+    assertThat(row(unreadable))
+        .containsEntry("status", "PENDING")
+        .containsEntry("attempts", 1)
+        .containsEntry("last_failure", OutboxDispatcher.UNREADABLE_VALUES);
+    assertThat(row(readable)).containsEntry("status", "SENT");
+    assertThat(mailTo(user.get("email")))
+        .singleElement()
+        .satisfies(message -> assertThat(message.body()).contains("7.00 THB", "TRF-ABC2"));
   }
 
   @Test

@@ -91,6 +91,20 @@ class GlobalExceptionHandlerTest {
         .andExpect(jsonPath("$.message").value(not(containsString("secret-detail"))));
   }
 
+  /** D14 (Q6): a lock or statement timeout is the generic 500, with nothing about SQL. */
+  @ParameterizedTest
+  @ValueSource(strings = {"lock", "uncategorized", "pessimistic", "statement"})
+  void aLockOrStatementTimeoutIsTheGenericSystemError(String kind) throws Exception {
+    mvc.perform(get("/probe/timeout/" + kind))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.errorCode").value("SYSTEM_ERROR"))
+        .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
+        .andExpect(content().string(not(containsString("SQL"))))
+        .andExpect(content().string(not(containsString("secret_column"))))
+        .andExpect(content().string(not(containsString("timeout"))))
+        .andExpect(content().string(not(containsString("55P03"))));
+  }
+
   @Test
   void unsupportedMethodIs405MethodNotAllowed() throws Exception {
     mvc.perform(post("/probe/insufficient"))
@@ -296,6 +310,33 @@ class GlobalExceptionHandlerTest {
     @GetMapping("/probe/boom")
     String boom() {
       throw new IllegalStateException("secret-detail");
+    }
+
+    // What Spring makes of PostgreSQL 55P03 (lock_timeout) and 57014 (statement_timeout).
+    @GetMapping("/probe/timeout/{kind}")
+    String timeout(@PathVariable String kind) {
+      String sql = "SELECT secret_column FROM wallet.wallets WHERE id = ? FOR UPDATE";
+      java.sql.SQLException cause =
+          new java.sql.SQLException("canceling statement due to lock timeout", "55P03");
+      throw switch (kind) {
+        case "lock" ->
+            new org.springframework.dao.CannotAcquireLockException(
+                "PreparedStatementCallback; SQL [" + sql + "]", cause);
+        // What Spring 7 actually raises for 55P03 today (LockContentionIT).
+        case "uncategorized" ->
+            new org.springframework.jdbc.UncategorizedSQLException(
+                "PreparedStatementCallback", sql, cause);
+        case "pessimistic" ->
+            new org.springframework.dao.PessimisticLockingFailureException(
+                "SQL [" + sql + "]", cause);
+        default ->
+            new org.springframework.dao.QueryTimeoutException(
+                "PreparedStatementCallback; SQL ["
+                    + sql
+                    + "]; canceling statement due to"
+                    + " statement timeout",
+                cause);
+      };
     }
   }
 

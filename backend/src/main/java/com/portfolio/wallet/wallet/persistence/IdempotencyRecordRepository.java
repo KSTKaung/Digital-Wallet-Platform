@@ -1,5 +1,6 @@
 package com.portfolio.wallet.wallet.persistence;
 
+import com.portfolio.wallet.common.idempotency.IdempotencyStore;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.Optional;
@@ -13,9 +14,13 @@ import org.springframework.stereotype.Repository;
  * Clock}, so the purge and the expiry check in a money transaction measure against the same time
  * source. A rejection is stored as {@code {"errorCode": …, "message": …}}; a success as the body
  * the caller supplies.
+ *
+ * <p>The wallet module's implementation of the shared engine's port ({@link IdempotencyStore}; doc
+ * 06 MVP-ADR-06 "Transfers and one engine"): it reads and writes this table only. Transfers have
+ * their own table and their own store in the transfer module.
  */
 @Repository
-public class IdempotencyRecordRepository {
+public class IdempotencyRecordRepository implements IdempotencyStore {
 
   private static final String KEY =
       "customer_id = :customer AND operation = :operation AND idempotency_key = :key";
@@ -42,6 +47,7 @@ public class IdempotencyRecordRepository {
    *     stored rejection's status, with {@code errorCode} and {@code message}
    * @return true if this call inserted the row
    */
+  @Override
   public boolean insertIfAbsent(
       UUID customerId,
       String operation,
@@ -82,7 +88,24 @@ public class IdempotencyRecordRepository {
    *
    * @return empty if there is none, for example because the purge deleted it meanwhile
    */
+  @Override
   public Optional<IdempotencyRecordRow> findForUpdate(UUID customerId, String operation, UUID key) {
+    return select(customerId, operation, key, " FOR UPDATE");
+  }
+
+  /**
+   * Reads the committed record without a lock, and without waiting for a transaction that holds it
+   * (the engine's early replay).
+   *
+   * @return empty if there is none, or if it is not committed yet
+   */
+  @Override
+  public Optional<IdempotencyRecordRow> find(UUID customerId, String operation, UUID key) {
+    return select(customerId, operation, key, "");
+  }
+
+  private Optional<IdempotencyRecordRow> select(
+      UUID customerId, String operation, UUID key, String lock) {
     return jdbc.sql(
             """
             SELECT request_hash, response_status, response_body::text AS body,
@@ -91,7 +114,7 @@ public class IdempotencyRecordRepository {
             FROM wallet.idempotency_records WHERE
             """
                 + KEY
-                + " FOR UPDATE")
+                + lock)
         .param("customer", customerId)
         .param("operation", operation)
         .param("key", key)
@@ -111,6 +134,7 @@ public class IdempotencyRecordRepository {
    * Replaces a locked record that no longer counts (expired, or without an outcome) by a new one;
    * parameters as {@link #insertIfAbsent}.
    */
+  @Override
   public void replace(
       UUID customerId,
       String operation,
@@ -147,6 +171,7 @@ public class IdempotencyRecordRepository {
   }
 
   /** Stores the success outcome on the record this transaction claimed. */
+  @Override
   public void complete(UUID customerId, String operation, UUID key, int status, String jsonBody) {
     int updated =
         jdbc.sql(
@@ -169,6 +194,7 @@ public class IdempotencyRecordRepository {
    * Rows locked by a money transaction are skipped ({@code SKIP LOCKED}), so the purge never waits
    * on, or blocks, a live movement; a skipped row is deleted by a later run if it is still expired.
    */
+  @Override
   public int deleteExpired(Instant now, int limit) {
     return jdbc.sql(
             """

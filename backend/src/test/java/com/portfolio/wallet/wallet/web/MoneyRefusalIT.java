@@ -48,7 +48,11 @@ class MoneyRefusalIT extends MoneyFlowSupport {
       assertThat(errorCode(response)).as(value).isEqualTo("VALIDATION_ERROR");
       assertThat(body(response).get("message").asString())
           .isEqualTo("fundingSource: is not supported");
-      assertThat(response.getContentAsString()).doesNotContain("4111").doesNotContain("BANK");
+      // The whole card number: a short fragment such as "4111" can occur by chance in the
+      // nanosecond timestamp of the body.
+      assertThat(response.getContentAsString())
+          .doesNotContain("4111111111111111")
+          .doesNotContain("BANK");
     }
     assertThat(idempotencyRecords(customer.id(), key)).isZero();
     assertThat(available(walletId(customer))).isEqualByComparingTo("0.00");

@@ -108,7 +108,13 @@ public class SecurityConfig {
 
   /** The customer's own resources: staff accounts have no customer data (MVP-ADR-12). */
   private static final String[] CUSTOMER_PATHS = {
-    "/api/v1/customers/**", "/api/v1/kyc/**", "/api/v1/wallet/**", "/api/v1/wallets/**"
+    "/api/v1/customers/**",
+    "/api/v1/kyc/**",
+    "/api/v1/wallet/**",
+    "/api/v1/wallets/**",
+    // Transfers (doc 02 §2.4): customers only, like the other money endpoints; the KYC check is
+    // the service's (403 KYC_REQUIRED, MVP-ADR-10), as for deposits and withdrawals.
+    "/api/v1/transfers/**"
   };
 
   /**
@@ -117,9 +123,15 @@ public class SecurityConfig {
    */
   private static final String[] OTHER_API_PATHS = {"/api/v1/**"};
 
-  /** Money POSTs with their own per-customer limit (doc 02 §1.8); transfers join in PR 5. */
+  /**
+   * Money POSTs with their own per-customer limit, 30 per minute (doc 02 §1.8; doc 06 MVP-ADR-06,
+   * MVP-ADR-24 amendment "Rate limit (Q15)"; doc 08 §4C.2 Q15): deposits, withdrawals and {@code
+   * POST /transfers}. Each pattern is an exact path matched for {@code POST} only, so {@code POST
+   * /transfers/{id}/cancel} (and, in PR 5b, the transfer-review actions) is <b>not</b> a money
+   * POST: it counts only toward the general per-user limit, like every other request.
+   */
   private static final String[] MONEY_PATHS = {
-    "/api/v1/wallet/deposits", "/api/v1/wallet/withdrawals"
+    "/api/v1/wallet/deposits", "/api/v1/wallet/withdrawals", "/api/v1/transfers"
   };
 
   private static final String AUTH_PATHS = "/api/v1/auth/**";
@@ -201,7 +213,8 @@ public class SecurityConfig {
                     clock),
                 errors),
             BearerTokenAuthenticationFilter.class)
-        // Money POSTs per customer (doc 02 §1.8), counted on top of the per-user limit above.
+        // Money POSTs per customer (doc 02 §1.8, Q15: deposits, withdrawals, POST /transfers; not
+        // the cancel), counted on top of the per-user limit above.
         .addFilterAfter(
             new RateLimitFilter(
                 "money",

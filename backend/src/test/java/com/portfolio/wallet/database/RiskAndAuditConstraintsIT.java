@@ -1,8 +1,10 @@
 package com.portfolio.wallet.database;
 
+import static com.portfolio.wallet.support.SqlAssertions.NOT_NULL_VIOLATION;
 import static com.portfolio.wallet.support.SqlAssertions.assertCheckViolation;
 import static com.portfolio.wallet.support.SqlAssertions.assertForeignKeyViolation;
 import static com.portfolio.wallet.support.SqlAssertions.assertRestrictViolation;
+import static com.portfolio.wallet.support.SqlAssertions.assertSqlState;
 import static com.portfolio.wallet.support.SqlAssertions.assertUniqueViolation;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,7 +92,84 @@ class RiskAndAuditConstraintsIT extends DatabaseIntegrationTest {
         () ->
             insert(
                 "risk.risk_rule_hits",
-                row("assessment_id", assessment, "rule_code", "LARGE_AMOUNT", "weight", weight)));
+                row(
+                    "assessment_id",
+                    assessment,
+                    "rule_code",
+                    "TRANSFER_AMOUNT",
+                    "weight",
+                    weight)));
+  }
+
+  // Rule codes (V12; MVP-ADR-24 "Score") -----------------------------------------------------
+
+  /** Every MVP rule code is accepted, one hit per rule on the same assessment. */
+  @Test
+  void theFourRuleCodesAreAccepted() throws SQLException {
+    UUID assessment = newRiskAssessment();
+    for (String code :
+        new String[] {
+          "TRANSFER_AMOUNT", "TRANSFER_FREQUENCY", "NEW_RECIPIENT", "NEW_SENDER_WALLET"
+        }) {
+      insert(
+          "risk.risk_rule_hits", row("assessment_id", assessment, "rule_code", code, "weight", 10));
+    }
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM risk.risk_rule_hits WHERE assessment_id = ?",
+                Integer.class,
+                assessment))
+        .isEqualTo(4);
+  }
+
+  /** Anything else is refused: an old fixture code, another spelling, a blank. */
+  @ParameterizedTest(name = "\"{0}\"")
+  @ValueSource(
+      strings = {
+        "LARGE_AMOUNT",
+        "transfer_amount",
+        "TRANSFER_AMOUNT ",
+        "NEW_WALLET",
+        "VELOCITY",
+        ""
+      })
+  void otherRuleCodesAreRejected(String code) throws SQLException {
+    UUID assessment = newRiskAssessment();
+
+    assertCheckViolation(
+        "ck_risk_rule_hits_rule_code",
+        () ->
+            insert(
+                "risk.risk_rule_hits",
+                row("assessment_id", assessment, "rule_code", code, "weight", 10)));
+  }
+
+  @Test
+  void aRuleHitNeedsARuleCode() throws SQLException {
+    UUID assessment = newRiskAssessment();
+
+    assertSqlState(
+        NOT_NULL_VIOLATION,
+        () ->
+            insert(
+                "risk.risk_rule_hits",
+                row("assessment_id", assessment, "rule_code", null, "weight", 10)));
+  }
+
+  @Test
+  void aRuleHitTwiceOnOneAssessmentIsRejected() throws SQLException {
+    UUID assessment = newRiskAssessment();
+    insert(
+        "risk.risk_rule_hits",
+        row("assessment_id", assessment, "rule_code", "NEW_RECIPIENT", "weight", 15));
+
+    assertUniqueViolation(
+        "pk_risk_rule_hits",
+        () ->
+            insert(
+                "risk.risk_rule_hits",
+                row("assessment_id", assessment, "rule_code", "NEW_RECIPIENT", "weight", 20)));
   }
 
   // Risk reviews ------------------------------------------------------------------------------
@@ -188,6 +267,193 @@ class RiskAndAuditConstraintsIT extends DatabaseIntegrationTest {
     assertCheckViolation(
         "ck_risk_reviews_action",
         () -> insert("risk.risk_reviews", review(assessment, "ESCALATE", UUID.randomUUID())));
+  }
+
+  // Review outcomes (V11; owner, 2026-11-06, D2 and D3) ---------------------------------------
+
+  private static final UUID SOMEONE = UUID.fromString("00000000-0000-4000-8000-000000000001");
+
+  /** One review row of each case of the D2 table (doc 06 MVP-ADR-24 "Review outcomes"). */
+  private Map<String, Object> reviewCase(String reviewCase) throws SQLException {
+    UUID assessment = newRiskAssessment();
+    return switch (reviewCase) {
+      case "1 staff approval" -> validRiskReview(assessment, "APPROVE", SOMEONE);
+      case "2 staff rejection" -> validRiskReview(assessment, "REJECT", SOMEONE);
+      case "3 system rejection" -> {
+        Map<String, Object> review = validRiskReview(assessment, "REJECT", SOMEONE);
+        review.put("decided_by", "SYSTEM");
+        review.put("requested_action", "APPROVE");
+        review.put("reason_category", null);
+        review.put("reason", null);
+        review.put("system_reason", "SENDER_WALLET_FROZEN");
+        yield review;
+      }
+      case "4 customer cancel" -> validRiskReview(assessment, "CANCEL", SOMEONE);
+      case "5 job expiry" -> validRiskReview(assessment, "EXPIRE", null);
+      case "6 late staff action" -> validRiskReview(assessment, "EXPIRE", SOMEONE);
+      case "7 late customer cancel" ->
+          with(validRiskReview(assessment, "EXPIRE", SOMEONE), "requested_action", "CANCEL");
+      default -> throw new IllegalArgumentException(reviewCase);
+    };
+  }
+
+  private Map<String, Object> systemRejection(String systemReason) throws SQLException {
+    return with(reviewCase("3 system rejection"), "system_reason", systemReason);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "1 staff approval",
+        "2 staff rejection",
+        "3 system rejection",
+        "4 customer cancel",
+        "5 job expiry",
+        "6 late staff action",
+        "7 late customer cancel"
+      })
+  void everyReviewCaseIsAccepted(String reviewCase) throws SQLException {
+    insert("risk.risk_reviews", reviewCase(reviewCase));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "SENDER_WALLET_FROZEN",
+        "SENDER_WALLET_CLOSED",
+        "RECIPIENT_WALLET_FROZEN",
+        "RECIPIENT_WALLET_CLOSED"
+      })
+  void aSystemRejectionNamesTheUnavailableWallet(String systemReason) throws SQLException {
+    insert("risk.risk_reviews", systemRejection(systemReason));
+  }
+
+  /**
+   * Rows outside the D2 table, each refused by the check named. PostgreSQL applies CHECK
+   * constraints in name order, so the first rule a row breaks is the one reported.
+   */
+  static Stream<Arguments> reviewsOutsideThePolicy() {
+    return Stream.of(
+        // Staff and system rejections never mix.
+        Arguments.of(
+            "2 staff rejection",
+            "system_reason",
+            "SENDER_WALLET_FROZEN",
+            "ck_risk_reviews_system_decision"),
+        Arguments.of("2 staff rejection", "reason", null, "ck_risk_reviews_staff_rejection"),
+        Arguments.of(
+            "2 staff rejection", "reason_category", null, "ck_risk_reviews_staff_rejection"),
+        Arguments.of(
+            "2 staff rejection",
+            "reason_category",
+            "REVIEW_DECLINED",
+            "ck_risk_reviews_reason_category"),
+        Arguments.of(
+            "2 staff rejection",
+            "reason_category",
+            "SUSPECTED_FRAUD",
+            "ck_risk_reviews_reason_category"),
+        Arguments.of("2 staff rejection", "reason", "   ", "ck_risk_reviews_reason_text"),
+        Arguments.of("2 staff rejection", "requested_action", "APPROVE", "ck_risk_reviews_outcome"),
+        Arguments.of("2 staff rejection", "actor_user_id", null, "ck_risk_reviews_actor"),
+        Arguments.of(
+            "3 system rejection", "reason", "Reviewer text", "ck_risk_reviews_staff_rejection"),
+        Arguments.of(
+            "3 system rejection",
+            "reason_category",
+            "STAFF_REJECTION",
+            "ck_risk_reviews_staff_rejection"),
+        Arguments.of(
+            "3 system rejection",
+            "system_reason",
+            "REVIEW_DEADLINE_PASSED",
+            "ck_risk_reviews_outcome"),
+        Arguments.of("3 system rejection", "system_reason", null, "ck_risk_reviews_outcome"),
+        Arguments.of("3 system rejection", "requested_action", "REJECT", "ck_risk_reviews_outcome"),
+        Arguments.of("3 system rejection", "requested_action", null, "ck_risk_reviews_outcome"),
+        // Approvals and cancels are not system decisions and carry no reason.
+        Arguments.of(
+            "1 staff approval",
+            "system_reason",
+            "REVIEW_DEADLINE_PASSED",
+            "ck_risk_reviews_system_decision"),
+        Arguments.of("1 staff approval", "decided_by", "SYSTEM", "ck_risk_reviews_outcome"),
+        Arguments.of("1 staff approval", "requested_action", null, "ck_risk_reviews_outcome"),
+        Arguments.of("1 staff approval", "reason", "Looks fine", "ck_risk_reviews_staff_rejection"),
+        Arguments.of("4 customer cancel", "decided_by", "STAFF", "ck_risk_reviews_outcome"),
+        Arguments.of("4 customer cancel", "requested_action", null, "ck_risk_reviews_outcome"),
+        Arguments.of(
+            "4 customer cancel", "reason", "Changed my mind", "ck_risk_reviews_staff_rejection"),
+        // Expiry is always the system's, for the deadline, with an actor exactly after a request.
+        Arguments.of("5 job expiry", "actor_user_id", SOMEONE, "ck_risk_reviews_outcome"),
+        Arguments.of("5 job expiry", "decided_by", "STAFF", "ck_risk_reviews_outcome"),
+        Arguments.of(
+            "5 job expiry", "system_reason", "SENDER_WALLET_FROZEN", "ck_risk_reviews_outcome"),
+        Arguments.of("5 job expiry", "system_reason", null, "ck_risk_reviews_outcome"),
+        Arguments.of("6 late staff action", "requested_action", null, "ck_risk_reviews_outcome"),
+        Arguments.of(
+            "6 late staff action",
+            "requested_action",
+            "EXPIRE",
+            "ck_risk_reviews_requested_action"),
+        Arguments.of("6 late staff action", "system_reason", "OTHER", "ck_risk_reviews_outcome"),
+        Arguments.of("6 late staff action", "decided_by", "ADMIN", "ck_risk_reviews_decided_by"),
+        // A late action stores no staff reason: the reviewer's text and category are dropped.
+        Arguments.of(
+            "6 late staff action", "reason", "Reviewer text", "ck_risk_reviews_staff_rejection"),
+        Arguments.of(
+            "6 late staff action",
+            "reason_category",
+            "STAFF_REJECTION",
+            "ck_risk_reviews_staff_rejection"),
+        Arguments.of("5 job expiry", "reason", "Reviewer text", "ck_risk_reviews_staff_rejection"),
+        // A requested action always has its triggering actor.
+        Arguments.of("6 late staff action", "actor_user_id", null, "ck_risk_reviews_outcome"),
+        Arguments.of("7 late customer cancel", "actor_user_id", null, "ck_risk_reviews_outcome"),
+        Arguments.of("7 late customer cancel", "decided_by", "CUSTOMER", "ck_risk_reviews_outcome"),
+        Arguments.of("3 system rejection", "actor_user_id", null, "ck_risk_reviews_actor"),
+        // Only listed system reasons, and only on system decisions.
+        Arguments.of(
+            "3 system rejection", "system_reason", "OTHER", "ck_risk_reviews_system_reason"),
+        Arguments.of(
+            "4 customer cancel",
+            "system_reason",
+            "SENDER_WALLET_FROZEN",
+            "ck_risk_reviews_system_decision"),
+        // A staff category alone, without a staff rejection, is refused too.
+        Arguments.of(
+            "1 staff approval",
+            "reason_category",
+            "STAFF_REJECTION",
+            "ck_risk_reviews_staff_rejection"),
+        Arguments.of(
+            "4 customer cancel",
+            "reason_category",
+            "STAFF_REJECTION",
+            "ck_risk_reviews_staff_rejection"));
+  }
+
+  /** Row 6 covers a late rejection as well as a late approval (doc 06 "Review outcomes"). */
+  @Test
+  void aLateRejectionExpiresWithoutTheReviewersReason() throws SQLException {
+    insert(
+        "risk.risk_reviews", with(reviewCase("6 late staff action"), "requested_action", "REJECT"));
+  }
+
+  @ParameterizedTest(name = "{0}: {1} = {2}")
+  @MethodSource("reviewsOutsideThePolicy")
+  void aReviewOutsideThePolicyIsRefused(
+      String reviewCase, String column, Object value, String constraint) throws SQLException {
+    Map<String, Object> review = with(reviewCase(reviewCase), column, value);
+
+    assertCheckViolation(constraint, () -> insert("risk.risk_reviews", review));
+  }
+
+  @Test
+  void everyReviewNamesItsDecisionSource() throws SQLException {
+    Map<String, Object> review = with(reviewCase("1 staff approval"), "decided_by", null);
+
+    assertSqlState(NOT_NULL_VIOLATION, () -> insert("risk.risk_reviews", review));
   }
 
   // Investigations ----------------------------------------------------------------------------
