@@ -97,8 +97,10 @@ public class SecurityConfig {
     "/api/v1/auth/logout", "/api/v1/auth/change-password"
   };
 
-  /** KYC decisions (MVP-ADR-10 amendment). */
-  private static final String[] COMPLIANCE_PATHS = {"/api/v1/admin/kyc/**"};
+  /** KYC decisions (MVP-ADR-10 amendment) and transfer reviews (MVP-ADR-12, -24). */
+  private static final String[] COMPLIANCE_PATHS = {
+    "/api/v1/admin/kyc/**", "/api/v1/admin/transfer-reviews/**"
+  };
 
   /** Wallet freeze and unfreeze (MVP-ADR-10 amendment). */
   private static final String[] ADMIN_PATHS = {"/api/v1/admin/customers/**"};
@@ -127,8 +129,8 @@ public class SecurityConfig {
    * Money POSTs with their own per-customer limit, 30 per minute (doc 02 §1.8; doc 06 MVP-ADR-06,
    * MVP-ADR-24 amendment "Rate limit (Q15)"; doc 08 §4C.2 Q15): deposits, withdrawals and {@code
    * POST /transfers}. Each pattern is an exact path matched for {@code POST} only, so {@code POST
-   * /transfers/{id}/cancel} (and, in PR 5b, the transfer-review actions) is <b>not</b> a money
-   * POST: it counts only toward the general per-user limit, like every other request.
+   * /transfers/{id}/cancel} (and the transfer-review actions under {@code /admin}) is <b>not</b> a
+   * money POST: it counts only toward the general per-user limit, like every other request.
    */
   private static final String[] MONEY_PATHS = {
     "/api/v1/wallet/deposits", "/api/v1/wallet/withdrawals", "/api/v1/transfers"

@@ -1,6 +1,8 @@
 package com.portfolio.wallet.risk.persistence;
 
 import java.sql.Types;
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -18,6 +20,49 @@ public class RiskReviewRepository {
 
   public RiskReviewRepository(JdbcClient jdbc) {
     this.jdbc = jdbc;
+  }
+
+  /** One stored review row, for the staff review detail; {@code reason} is staff-only. */
+  public record ReviewRow(
+      String action,
+      String decidedBy,
+      String requestedAction,
+      UUID actorUserId,
+      String reasonCategory,
+      String reason,
+      String systemReason,
+      Instant createdAt) {
+
+    /** Leaves the actor and the reviewer's text out of logs. */
+    @Override
+    public String toString() {
+      return "ReviewRow[action=" + action + ", decidedBy=" + decidedBy + "]";
+    }
+  }
+
+  /**
+   * The review row of {@code transferId}, if it has one (at most one, uq_risk_reviews_transfer).
+   */
+  public Optional<ReviewRow> findByTransfer(UUID transferId) {
+    return jdbc.sql(
+            """
+            SELECT action, decided_by, requested_action, actor_user_id, reason_category, reason,
+                   system_reason, created_at
+            FROM risk.risk_reviews WHERE transfer_id = :transfer
+            """)
+        .param("transfer", transferId)
+        .query(
+            (rs, row) ->
+                new ReviewRow(
+                    rs.getString("action"),
+                    rs.getString("decided_by"),
+                    rs.getString("requested_action"),
+                    rs.getObject("actor_user_id", UUID.class),
+                    rs.getString("reason_category"),
+                    rs.getString("reason"),
+                    rs.getString("system_reason"),
+                    Timestamps.read(rs, "created_at")))
+        .optional();
   }
 
   /**

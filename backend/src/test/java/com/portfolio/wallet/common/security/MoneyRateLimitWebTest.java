@@ -79,6 +79,17 @@ class MoneyRateLimitWebTest {
                   .getStatus())
           .isNotEqualTo(429);
       assertThat(send(get(TRANSFERS).with(user("gina"))).getStatus()).isNotEqualTo(429);
+      // PR 5b: the staff review actions are not money POSTs either (Q15).
+      for (String action : new String[] {"approve", "reject"}) {
+        assertThat(
+                send(post("/api/v1/admin/transfer-reviews/"
+                            + java.util.UUID.randomUUID()
+                            + "/"
+                            + action)
+                        .with(user("gina")))
+                    .getStatus())
+            .isNotEqualTo(429);
+      }
     }
     // Another customer's transfers have their own count.
     assertThat(send(post(TRANSFERS).with(user("hank"))).getStatus()).isNotEqualTo(429);

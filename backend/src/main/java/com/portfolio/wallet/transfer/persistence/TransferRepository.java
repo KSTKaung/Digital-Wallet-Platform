@@ -263,6 +263,57 @@ public class TransferRepository {
   }
 
   /**
+   * A transfer that was held for review ({@code held_at} is set exactly for one created {@code
+   * PENDING_REVIEW}, and never changes; V4), whatever its status now: the staff review's view of a
+   * transfer. A transfer created {@code COMPLETED} or {@code BLOCKED} never went to review and is
+   * not found.
+   */
+  private static final String HELD_FOR_REVIEW = "id = :id AND held_at IS NOT NULL";
+
+  /**
+   * Locks a transfer that was held for review {@code FOR UPDATE} in a statement of its own: the
+   * first lock of a staff approval or rejection (doc 08 §4C.3). A transfer that never went to
+   * review takes no lock and is not found (the staff {@code 404}).
+   */
+  public Optional<TransferRow> lockHeldForReview(UUID id) {
+    return jdbc.sql(SELECT + HELD_FOR_REVIEW + LockMode.WAIT.clause)
+        .param("id", id)
+        .query(TransferRepository::map)
+        .optional();
+  }
+
+  /** A transfer that was held for review, as committed now, without a lock. */
+  public Optional<TransferRow> findHeldForReview(UUID id) {
+    return jdbc.sql(SELECT + HELD_FOR_REVIEW)
+        .param("id", id)
+        .query(TransferRepository::map)
+        .optional();
+  }
+
+  /**
+   * One page of the review queue (documentations/06 MVP-ADR-24 amendment "Review queue (Q12)"):
+   * {@code PENDING_REVIEW} transfers, soonest deadline first, then by id, so pages never overlap
+   * (partial index {@code ix_transfers_review_expires}).
+   */
+  public List<TransferRow> pageAwaitingReview(int limit, long offset) {
+    return jdbc.sql(
+            SELECT
+                + "status = 'PENDING_REVIEW' ORDER BY review_expires_at, id LIMIT :limit OFFSET"
+                + " :offset")
+        .param("limit", limit)
+        .param("offset", offset)
+        .query(TransferRepository::map)
+        .list();
+  }
+
+  /** How many transfers are {@code PENDING_REVIEW}. */
+  public long countAwaitingReview() {
+    return jdbc.sql("SELECT count(*) FROM transfer.transfers WHERE status = 'PENDING_REVIEW'")
+        .query(Long.class)
+        .single();
+  }
+
+  /**
    * The database time at the start of this statement, read after the row lock is held, so a
    * deadline check compares the same clock as the V4 guard ({@code statement_timestamp()}).
    */

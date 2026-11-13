@@ -193,7 +193,8 @@ class AccessControlIT extends AdminFlowSupport {
         List.of(
             getAs("/api/v1/admin/no-such-thing", token),
             getAs("/api/v1/admin", token),
-            send(post("/api/v1/admin/transfer-reviews/x/approve"), token))) {
+            // The transfer reviews have a handler since PR 5b; another group still has none.
+            send(post("/api/v1/admin/no-such-group/x/approve"), token))) {
       assertThat(response.getStatus()).isEqualTo(404);
       assertThat(stable(response)).isEqualTo(stable(reference));
     }
