@@ -116,7 +116,9 @@ public class SecurityConfig {
     "/api/v1/wallets/**",
     // Transfers (doc 02 §2.4): customers only, like the other money endpoints; the KYC check is
     // the service's (403 KYC_REQUIRED, MVP-ADR-10), as for deposits and withdrawals.
-    "/api/v1/transfers/**"
+    "/api/v1/transfers/**",
+    // History (doc 06 MVP-ADR-11 amendment): the caller's own ledger entries.
+    "/api/v1/transactions/**"
   };
 
   /**

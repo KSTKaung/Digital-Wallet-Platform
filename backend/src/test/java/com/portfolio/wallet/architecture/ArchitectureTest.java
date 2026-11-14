@@ -52,6 +52,11 @@ class ArchitectureTest {
   }
 
   @Test
+  void transactionReadsOnlyWalletAndLedger() {
+    ArchitectureRules.transactionReadsOnlyWalletAndLedger(ROOT).check(CLASSES);
+  }
+
+  @Test
   void applicationApisHidePersistence() {
     ArchitectureRules.applicationApisHidePersistence().check(CLASSES);
   }

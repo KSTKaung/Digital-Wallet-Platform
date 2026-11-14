@@ -68,6 +68,19 @@ class ArchitectureRulesSelfTest {
             "RiskCallerReader.users");
   }
 
+  /** The history module may use only common, wallet.application and ledger.application. */
+  @Test
+  void detectsTheTransactionModuleDependingBeyondWalletAndLedger() {
+    var result =
+        ArchitectureRules.transactionReadsOnlyWalletAndLedger(FIXTURE_ROOT).evaluate(FIXTURES);
+
+    assertThat(result.hasViolation()).isTrue();
+    assertThat(result.getFailureReport().toString())
+        .contains("TransactionCallerReader.transfers", "TransactionCallerReader.wallet")
+        // common, wallet.application, ledger.application, its own package and the JDK are allowed.
+        .doesNotContain("TransactionHistoryReader");
+  }
+
   @Test
   void detectsAnApplicationApiExposingPersistence() {
     var result = ArchitectureRules.applicationApisHidePersistence().evaluate(FIXTURES);

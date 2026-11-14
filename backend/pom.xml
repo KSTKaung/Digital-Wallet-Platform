@@ -204,6 +204,7 @@
                     <include>com.portfolio.wallet.transfer.application</include>
                     <include>com.portfolio.wallet.risk.application</include>
                     <include>com.portfolio.wallet.admin.application</include>
+                    <include>com.portfolio.wallet.transaction.application</include>
                   </includes>
                   <limits>
                     <limit>
