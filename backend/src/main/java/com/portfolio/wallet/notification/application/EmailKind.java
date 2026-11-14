@@ -25,5 +25,10 @@ public enum EmailKind {
   /** To the sender, when they cancel a held transfer. */
   TRANSFER_CANCELLED,
   /** To the sender, when a held transfer expires (the job, or an action after the deadline). */
-  TRANSFER_EXPIRED
+  TRANSFER_EXPIRED,
+  /**
+   * To each active compliance officer, once, when a held transfer has waited the reminder period
+   * (12 hours) and will expire unless decided (MVP-ADR-24 "Expiry"; PR 5b). Staff only.
+   */
+  TRANSFER_REVIEW_EXPIRING
 }

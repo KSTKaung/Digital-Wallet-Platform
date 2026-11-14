@@ -5,10 +5,14 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -71,6 +75,51 @@ public class NotificationRepository {
         .param("payload", json.writeValueAsString(values))
         .param("next", bind(nextAttemptAt))
         .update();
+  }
+
+  /**
+   * As {@link #insert}, unless a row with {@code eventId} already exists, whatever its state: then
+   * nothing is written and no error is raised, so the caller's transaction goes on. A concurrent
+   * insert of the same id waits for the other transaction and then does nothing if it committed
+   * ({@code ON CONFLICT DO NOTHING} on the primary key; needs only the INSERT grant).
+   *
+   * @return whether this call wrote the row
+   */
+  public boolean insertIfAbsent(
+      UUID eventId, UUID userId, String kind, Map<String, String> values, Instant nextAttemptAt) {
+    return jdbc.sql(
+                """
+                INSERT INTO notification.notifications
+                  (event_id, user_id, kind, payload, next_attempt_at)
+                VALUES (:event, :user, :kind, CAST(:payload AS jsonb), :next)
+                ON CONFLICT (event_id) DO NOTHING
+                """)
+            .param("event", eventId)
+            .param("user", userId)
+            .param("kind", kind)
+            .param("payload", json.writeValueAsString(values))
+            .param("next", bind(nextAttemptAt))
+            .update()
+        == 1;
+  }
+
+  /** The most ids one existence query binds, well below PostgreSQL's bind-parameter limit. */
+  static final int MAX_IDS_PER_QUERY = 1000;
+
+  /**
+   * @return those of {@code eventIds} that have a row, in any state; a read without locks
+   */
+  public Set<UUID> existingEventIds(Collection<UUID> eventIds) {
+    List<UUID> ids = List.copyOf(new LinkedHashSet<>(eventIds));
+    Set<UUID> existing = new HashSet<>();
+    for (int from = 0; from < ids.size(); from += MAX_IDS_PER_QUERY) {
+      existing.addAll(
+          jdbc.sql("SELECT event_id FROM notification.notifications WHERE event_id IN (:ids)")
+              .param("ids", ids.subList(from, Math.min(ids.size(), from + MAX_IDS_PER_QUERY)))
+              .query(UUID.class)
+              .list());
+    }
+    return existing;
   }
 
   /**

@@ -3,6 +3,7 @@ package com.portfolio.wallet.auth.persistence;
 import com.portfolio.wallet.auth.domain.Role;
 import com.portfolio.wallet.auth.domain.UserStatus;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -59,6 +60,19 @@ public class UserRepository {
         .param("role", role.name())
         .query(UUID.class)
         .optional();
+  }
+
+  /**
+   * The ids of the {@code ACTIVE} accounts with {@code role}, in ascending id order (PostgreSQL's
+   * uuid order). A read without locks; {@code auth.users} has no index on the role, so this scans
+   * the table (staff and customers), which callers keep to runs that need it.
+   */
+  public List<UUID> findActiveIdsByRole(Role role) {
+    return jdbc.sql("SELECT id FROM auth.users WHERE role = :role AND status = :status ORDER BY id")
+        .param("role", role.name())
+        .param("status", UserStatus.ACTIVE.name())
+        .query(UUID.class)
+        .list();
   }
 
   /**
@@ -169,19 +183,20 @@ public class UserRepository {
   }
 
   /**
-   * As {@link #findContacts(UUID)}, with a per-statement query timeout (S1): the JDBC driver
-   * cancels the statement after {@code timeout}, rounded up to whole seconds, and the call throws a
-   * {@code DataAccessException}. A statement timeout, not {@code SET LOCAL statement_timeout},
-   * because the email outbox calls this with no transaction open. Inside a transaction with its own
-   * timeout, the shorter of the two applies.
+   * The email address and status of one account, for the email outbox's send-time lookup (owner,
+   * 2026-11-14, decision 8), with a per-statement query timeout (S1): the JDBC driver cancels the
+   * statement after {@code timeout}, rounded up to whole seconds, and the call throws a {@code
+   * DataAccessException}. A statement timeout, not {@code SET LOCAL statement_timeout}, because the
+   * outbox calls this with no transaction open. Inside a transaction with its own timeout, the
+   * shorter of the two applies.
    */
-  public Optional<ContactRow> findContacts(UUID id, Duration timeout) {
+  public Optional<RecipientRow> findRecipient(UUID id, Duration timeout) {
     JdbcTemplate template = new JdbcTemplate(dataSource);
     template.setQueryTimeout((int) Math.max(1, (timeout.toMillis() + 999) / 1000));
     return template
         .query(
-            "SELECT email, phone_number FROM auth.users WHERE id = ?",
-            (rs, row) -> new ContactRow(rs.getString("email"), rs.getString("phone_number")),
+            "SELECT email, status FROM auth.users WHERE id = ?",
+            (rs, row) -> new RecipientRow(rs.getString("email"), rs.getString("status")),
             id)
         .stream()
         .findFirst();

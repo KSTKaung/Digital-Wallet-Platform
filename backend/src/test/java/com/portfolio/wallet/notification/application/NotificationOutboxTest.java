@@ -2,14 +2,20 @@ package com.portfolio.wallet.notification.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.portfolio.wallet.notification.persistence.NotificationRepository;
 import com.portfolio.wallet.support.MutableClock;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -74,7 +80,8 @@ class NotificationOutboxTest {
         "TRANSFER_HELD",
         "TRANSFER_REJECTED",
         "TRANSFER_CANCELLED",
-        "TRANSFER_EXPIRED"
+        "TRANSFER_EXPIRED",
+        "TRANSFER_REVIEW_EXPIRING"
       })
   void aMoneyEmailIsStoredWithExactlyItsValues(EmailKind kind) {
     Map<String, String> values =
@@ -91,6 +98,57 @@ class NotificationOutboxTest {
     assertThatThrownBy(() -> outbox.enqueue(user, kind, more))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageNotContaining("12345678901");
+  }
+
+  // A caller-chosen event id (doc 08 §4C.3: reminder deduplication) -----------------------------
+
+  @Test
+  void anEmailUnderACallerChosenIdIsWrittenOnceAndADuplicateIsNoError() {
+    UUID event = UUID.randomUUID();
+    Map<String, String> values =
+        MoneyEmailValues.of(new java.math.BigDecimal("1300"), "THB", "TRF-ABC123");
+    when(notifications.insertIfAbsent(
+            event, user, "TRANSFER_REVIEW_EXPIRING", values, clock.instant()))
+        .thenReturn(true, false);
+
+    assertThat(outbox.enqueueOnce(event, user, EmailKind.TRANSFER_REVIEW_EXPIRING, values))
+        .isTrue();
+    assertThat(outbox.enqueueOnce(event, user, EmailKind.TRANSFER_REVIEW_EXPIRING, values))
+        .isFalse();
+    verify(notifications, never()).insert(any(), any(), any(), any(), any());
+  }
+
+  /** The same value checks as a random id: the reminder takes exactly the money values (Q9). */
+  @Test
+  void aCallerChosenIdGetsTheSameValueChecks() {
+    UUID event = UUID.randomUUID();
+    Map<String, String> values =
+        new HashMap<>(MoneyEmailValues.of(new java.math.BigDecimal("1"), "THB", "TRF-ABC123"));
+    values.put("senderName", "Somchai Jaidee");
+
+    assertThatThrownBy(
+            () -> outbox.enqueueOnce(event, user, EmailKind.TRANSFER_REVIEW_EXPIRING, values))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageNotContaining("Somchai");
+    assertThatThrownBy(
+            () -> outbox.enqueueOnce(event, user, EmailKind.TRANSFER_REVIEW_EXPIRING, Map.of()))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> outbox.enqueueOnce(event, user, EmailKind.OTP, Map.of()))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> outbox.enqueueOnce(null, user, EmailKind.KYC_APPROVED, Map.of()))
+        .isInstanceOf(NullPointerException.class);
+    verifyNoInteractions(notifications);
+  }
+
+  @Test
+  void recordedIdsAreReadInOneCallAndAnEmptyQuestionReadsNothing() {
+    UUID known = UUID.randomUUID();
+    UUID unknown = UUID.randomUUID();
+    when(notifications.existingEventIds(List.of(known, unknown))).thenReturn(Set.of(known));
+
+    assertThat(outbox.recorded(List.of(known, unknown))).containsExactly(known);
+    assertThat(outbox.recorded(List.of())).isEmpty();
+    verify(notifications, times(1)).existingEventIds(any());
   }
 
   @Test

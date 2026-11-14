@@ -217,6 +217,89 @@ public class TransferRepository {
         .list();
   }
 
+  /**
+   * A held transfer that has waited the reminder period and has not reached its deadline: the
+   * reminder job's candidate (documentations/06 MVP-ADR-24 "Expiry"), with the three values its
+   * email may state (Q9) and its position in the job's order. Never the parties or the description.
+   */
+  public record ReminderCandidate(
+      UUID id, String reference, BigDecimal amount, String currency, Instant reviewExpiresAt) {
+
+    public ReminderCandidate {
+      Objects.requireNonNull(id, "id");
+      Objects.requireNonNull(reviewExpiresAt, "reviewExpiresAt");
+    }
+  }
+
+  /**
+   * Held, held at least the reminder period before this statement's database time, and before the
+   * deadline (at the deadline the expiry job owns it, and "will expire" would no longer be true).
+   * The partial index {@code ix_transfers_review_expires} (held rows only) supplies the deadline
+   * bound and the order; the {@code held_at} condition is not in the index and is checked on each
+   * row fetched from the table. With one review duration the qualifying holds come first in
+   * deadline order, so the last page of a run also fetches younger holds and discards them.
+   */
+  private static final String AWAITING_REMINDER =
+      """
+      SELECT id, reference, amount, currency, review_expires_at FROM transfer.transfers
+      WHERE status = 'PENDING_REVIEW'
+        AND held_at <= statement_timestamp() - make_interval(secs => :reminderSeconds)
+        AND review_expires_at > statement_timestamp()
+      """;
+
+  /**
+   * The reminder job's candidates, read without locks, soonest deadline first.
+   *
+   * @param after the last candidate of the previous page, or null for the first page; the page
+   *     starts strictly after it in {@code (review_expires_at, id)} order
+   * @param reminderSeconds the reminder period in whole seconds
+   * @param limit at least 1
+   */
+  public List<ReminderCandidate> findAwaitingReminder(
+      ReminderCandidate after, long reminderSeconds, int limit) {
+    if (limit < 1) {
+      throw new IllegalArgumentException("limit must be at least 1");
+    }
+    JdbcClient.StatementSpec statement;
+    if (after == null) {
+      statement = jdbc.sql(AWAITING_REMINDER + " ORDER BY review_expires_at, id LIMIT :limit");
+    } else {
+      statement =
+          jdbc.sql(
+                  AWAITING_REMINDER
+                      + " AND (review_expires_at, id) > (:afterDeadline, :afterId)"
+                      + " ORDER BY review_expires_at, id LIMIT :limit")
+              .param("afterDeadline", Timestamps.bind(after.reviewExpiresAt()))
+              .param("afterId", after.id());
+    }
+    return statement
+        .param("reminderSeconds", reminderSeconds)
+        .param("limit", limit)
+        .query(TransferRepository::mapReminderCandidate)
+        .list();
+  }
+
+  /**
+   * One transfer, if it is still a reminder candidate at this statement's time; read without a
+   * lock, so the reminder never waits on or blocks a decision.
+   */
+  public Optional<ReminderCandidate> findAwaitingReminder(UUID id, long reminderSeconds) {
+    return jdbc.sql(AWAITING_REMINDER + " AND id = :id")
+        .param("reminderSeconds", reminderSeconds)
+        .param("id", id)
+        .query(TransferRepository::mapReminderCandidate)
+        .optional();
+  }
+
+  private static ReminderCandidate mapReminderCandidate(ResultSet rs, int row) throws SQLException {
+    return new ReminderCandidate(
+        rs.getObject("id", UUID.class),
+        rs.getString("reference"),
+        rs.getBigDecimal("amount"),
+        rs.getString("currency"),
+        Timestamps.read(rs, "review_expires_at"));
+  }
+
   /** How a transfer-row lock treats a row another transaction holds. */
   public enum LockMode {
     /** Wait for it, bounded by the D14 {@code lock_timeout}: cancel and staff review. */

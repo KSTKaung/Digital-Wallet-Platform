@@ -33,7 +33,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li><strong>Send</strong>, with no transaction open: resolve the kind, look up the address
  *       through {@link RecipientAddresses} and hand the message to {@link EmailSender}. Any failure
  *       here (an unknown kind, a missing address, a database error in the lookup, an SMTP error)
- *       fails this attempt.
+ *       fails this attempt. A recipient whose account is no longer {@code ACTIVE} (owner,
+ *       2026-11-14, decision 8) is not sent to at all: the row becomes {@code FAILED} with {@link
+ *       #RECIPIENT_NOT_ACTIVE} at once, without retries.
  *   <li><strong>Record</strong>, in a short transaction: {@code SENT}; or, after a failure, the
  *       next attempt time by the backoff, or {@code FAILED} if this was the last allowed claim. The
  *       update is conditional on {@code PENDING} and on the fencing token, so the result of an
@@ -66,6 +68,14 @@ public class OutboxDispatcher {
 
   /** The recorded failure when the account has no address (or no longer exists). */
   static final String NO_ADDRESS = "NoAddress";
+
+  /**
+   * The recorded failure when the recipient's account exists but is no longer {@code ACTIVE} at
+   * send time (owner, 2026-11-14, decision 8): the row becomes {@code FAILED} at once, unsent and
+   * never retried. Distinct from {@link #NO_ADDRESS} (no account, or no address), which keeps the
+   * retry policy.
+   */
+  static final String RECIPIENT_NOT_ACTIVE = "RecipientNotActive";
 
   /** The recorded failure for a stored kind this build does not know. */
   static final String UNKNOWN_KIND = "UnknownKind";
@@ -206,14 +216,26 @@ public class OutboxDispatcher {
       return UNREADABLE_VALUES;
     }
     try {
-      Optional<String> address =
-          recipients.emailOf(row.userId(), properties.addressLookupTimeout());
-      if (address.isEmpty()) {
-        return NO_ADDRESS;
+      RecipientAddress recipient =
+          recipients.lookup(row.userId(), properties.addressLookupTimeout());
+      switch (recipient.outcome()) {
+        case NOT_ACTIVE -> {
+          return RECIPIENT_NOT_ACTIVE;
+        }
+        case NOT_FOUND -> {
+          return NO_ADDRESS;
+        }
+        case ACTIVE -> {
+          // Sent below.
+        }
       }
       sender.send(
           OutboxTemplates.render(
-              kind, address.get(), row.occurredAt(), businessTime.businessZone(), row.values()));
+              kind,
+              recipient.email().orElseThrow(),
+              row.occurredAt(),
+              businessTime.businessZone(),
+              row.values()));
       return null;
     } catch (RuntimeException e) {
       return e.getClass().getSimpleName();
@@ -232,6 +254,19 @@ public class OutboxDispatcher {
       return;
     }
     String recorded = bounded(failure);
+    if (RECIPIENT_NOT_ACTIVE.equals(failure)) {
+      // Decision 8: never sent and never retried, whatever claims are left.
+      if (notifications.markFailed(row.eventId(), claim, recorded) == 1) {
+        log.warn(
+            "Email outbox: recipient not active, not sent: eventId={}, kind={}, failure={}",
+            row.eventId(),
+            row.kind(),
+            recorded);
+      } else {
+        logOlderClaim(row);
+      }
+      return;
+    }
     if (claim >= properties.maxAttempts()) {
       if (notifications.markFailed(row.eventId(), claim, recorded) == 1) {
         log.warn(
