@@ -2,6 +2,7 @@ package com.portfolio.wallet.notification.application;
 
 import com.portfolio.wallet.notification.persistence.NotificationRepository;
 import java.time.Clock;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -43,6 +44,52 @@ public class NotificationOutbox {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public UUID enqueue(UUID userId, EmailKind kind, Map<String, String> values) {
+    check(userId, kind, values);
+    UUID eventId = UUID.randomUUID();
+    // Due at once, by the application clock that the dispatcher compares with (N2).
+    notifications.insert(eventId, userId, kind.name(), Map.copyOf(values), clock.instant());
+    return eventId;
+  }
+
+  /** {@link #enqueue(UUID, EmailKind, Map)} without template values. */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public UUID enqueue(UUID userId, EmailKind kind) {
+    return enqueue(userId, kind, Map.of());
+  }
+
+  /**
+   * As {@link #enqueue(UUID, EmailKind, Map)}, under an event id the caller chooses (doc 08 §4C.3:
+   * reminder deduplication). If a row with that id already exists, in any state, nothing is written
+   * and nothing fails, so a second run, a second instance or a concurrent run of the same job adds
+   * nothing (MVP-ADR-24 "Jobs (Q11)"). The caller derives the id deterministically from what makes
+   * the email unique, and never from a random value; it must not collide with the random (version
+   * 4) ids of {@link #enqueue(UUID, EmailKind, Map)}, for example by being name-based (version 5).
+   *
+   * <p>Must run inside the caller's transaction; without one it throws.
+   *
+   * @return whether this call wrote the row; false if the id was already recorded
+   * @throws IllegalArgumentException as {@link #enqueue(UUID, EmailKind, Map)}
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public boolean enqueueOnce(
+      UUID eventId, UUID userId, EmailKind kind, Map<String, String> values) {
+    Objects.requireNonNull(eventId, "eventId");
+    check(userId, kind, values);
+    return notifications.insertIfAbsent(
+        eventId, userId, kind.name(), Map.copyOf(values), clock.instant());
+  }
+
+  /**
+   * Which of {@code eventIds} are already recorded, in any state, as committed now (no lock), so a
+   * job can skip the emails it already wrote without opening a transaction for each. A hint only:
+   * {@link #enqueueOnce} stays the guard against a concurrent writer.
+   */
+  public Set<UUID> recorded(Collection<UUID> eventIds) {
+    Objects.requireNonNull(eventIds, "eventIds");
+    return eventIds.isEmpty() ? Set.of() : notifications.existingEventIds(eventIds);
+  }
+
+  private static void check(UUID userId, EmailKind kind, Map<String, String> values) {
     Objects.requireNonNull(userId, "userId");
     Objects.requireNonNull(kind, "kind");
     Objects.requireNonNull(values, "values");
@@ -60,15 +107,5 @@ public class NotificationOutbox {
     if (!values.keySet().containsAll(accepted)) {
       throw new IllegalArgumentException(kind + " needs the values " + accepted);
     }
-    UUID eventId = UUID.randomUUID();
-    // Due at once, by the application clock that the dispatcher compares with (N2).
-    notifications.insert(eventId, userId, kind.name(), Map.copyOf(values), clock.instant());
-    return eventId;
-  }
-
-  /** {@link #enqueue(UUID, EmailKind, Map)} without template values. */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public UUID enqueue(UUID userId, EmailKind kind) {
-    return enqueue(userId, kind, Map.of());
   }
 }

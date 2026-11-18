@@ -9,6 +9,7 @@ import com.portfolio.wallet.wallet.domain.Tier;
 import com.portfolio.wallet.wallet.domain.Wallet;
 import com.portfolio.wallet.wallet.persistence.WalletRepository;
 import com.portfolio.wallet.wallet.persistence.WalletRow;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,6 +79,15 @@ public class WalletQueryService {
         withdrawal.minimum().amount(),
         deposit.minimum().amount(),
         transfer.minimum().currency().getCurrencyCode());
+  }
+
+  /**
+   * The customer's wallet id, in any status, for another module's read of the customer's own data
+   * ({@code GET /transactions}, MVP-ADR-11). Empty before KYC approval (MVP-ADR-10).
+   */
+  @Transactional(readOnly = true)
+  public Optional<UUID> findWalletId(UUID customerId) {
+    return wallets.findByCustomer(customerId).map(WalletRow::id);
   }
 
   private WalletRow find(UUID customerId) {

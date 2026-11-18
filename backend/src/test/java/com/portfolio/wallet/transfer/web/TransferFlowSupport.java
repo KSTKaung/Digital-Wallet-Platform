@@ -18,6 +18,7 @@ import com.portfolio.wallet.support.DatabaseIntegrationTest;
 import com.portfolio.wallet.support.OutboxRows;
 import com.portfolio.wallet.transfer.persistence.TransferRepository;
 import com.portfolio.wallet.wallet.application.WalletNumberGenerator;
+import com.portfolio.wallet.wallet.application.WalletReconciliationReads;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -84,6 +85,12 @@ abstract class TransferFlowSupport extends DatabaseIntegrationTest {
   @MockitoSpyBean AuditLogRepository auditRowsSpy;
   @MockitoSpyBean RiskAssessmentRepository riskRowsSpy;
   @MockitoSpyBean NotificationRepository notificationRowsSpy;
+
+  /**
+   * Spied here rather than in {@code ReconciliationSnapshotIT}, so that test shares this context
+   * instead of starting one of its own. A spy calls the real reads, and is reset after every test.
+   */
+  @MockitoSpyBean WalletReconciliationReads walletReadsSpy;
 
   record Account(UUID id, String token) {}
 
@@ -232,6 +239,38 @@ abstract class TransferFlowSupport extends DatabaseIntegrationTest {
 
   MockHttpServletResponse cancel(UUID transferId, Account caller) throws Exception {
     return send(post(TRANSFERS + "/" + transferId + "/cancel"), caller.token());
+  }
+
+  // Staff review (PR 5b) ------------------------------------------------------------------------
+
+  static final String REVIEWS = "/api/v1/admin/transfer-reviews";
+
+  Account officer() throws Exception {
+    return account(Role.COMPLIANCE_OFFICER);
+  }
+
+  MockHttpServletResponse approveReview(UUID transferId, Account reviewer) throws Exception {
+    return send(post(REVIEWS + "/" + transferId + "/approve"), reviewer.token());
+  }
+
+  MockHttpServletResponse rejectReview(UUID transferId, String reason, Account reviewer)
+      throws Exception {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("reason", reason);
+    return postAs(REVIEWS + "/" + transferId + "/reject", body, reviewer.token());
+  }
+
+  MockHttpServletResponse reviewDetail(UUID transferId, Account reviewer) throws Exception {
+    return getAs(REVIEWS + "/" + transferId, reviewer.token());
+  }
+
+  /** The {@code TRANSFER_REVIEW} audit rows of a transfer, oldest first. */
+  List<Map<String, Object>> reviewAuditsOf(UUID transferId) {
+    return jdbc.queryForList(
+        "SELECT actor_id, actor_type, result, old_value::text AS old_value,"
+            + " new_value::text AS new_value FROM audit.audit_logs"
+            + " WHERE action = 'TRANSFER_REVIEW' AND resource_id = ? ORDER BY id",
+        transferId.toString());
   }
 
   MockHttpServletResponse send(MockHttpServletRequestBuilder request, String token)

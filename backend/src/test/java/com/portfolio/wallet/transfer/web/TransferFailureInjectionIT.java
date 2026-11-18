@@ -14,6 +14,7 @@ import com.portfolio.wallet.transfer.persistence.TransferRepository.LockMode;
 import com.portfolio.wallet.wallet.persistence.DailyLimitUsageRepository;
 import com.portfolio.wallet.wallet.persistence.WalletRepository;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -406,6 +407,265 @@ class TransferFailureInjectionIT extends TransferReviewFlowSupport {
     expiry.expireDue();
 
     assertReleasedOnce(id, sender, recipient, "EXPIRED", "TRANSFER_EXPIRED");
+  }
+
+  // Staff review (PR 5b) ------------------------------------------------------------------------
+
+  /**
+   * Write points of the staff approval and rejection, in the order the transaction reaches them.
+   */
+  enum ReviewPoint {
+    /** The transfer row is locked in a statement of its own. */
+    AFTER_TRANSFER_ROW_LOCK,
+    /** Both wallets are locked. */
+    AFTER_WALLET_LOCKS,
+    /** The sender's snapshot and the stored day's usage: captured (approve) or released. */
+    AFTER_CAPTURE_OR_RELEASE,
+    /** The ledger header and both entries (approve with both wallets active only). */
+    AFTER_LEDGER_POSTING,
+    /** The status {@code UPDATE} (with the version check). */
+    AFTER_STATUS_UPDATE,
+    /** The risk review row. */
+    AFTER_REVIEW_ROW,
+    /** The {@code TRANSFER_REVIEW} audit row. */
+    AFTER_AUDIT_ROW,
+    /** The sender's email row ({@code TRANSFER_SENT}, {@code _REJECTED} or {@code _EXPIRED}). */
+    AT_SENDER_EMAIL_ROW,
+    /** The recipient's {@code TRANSFER_RECEIVED} email row (approve only), the last write. */
+    AT_RECIPIENT_EMAIL_ROW
+  }
+
+  private void failReviewAt(
+      ReviewPoint point,
+      UUID transferId,
+      Account sender,
+      Account recipient,
+      String senderEmailKind) {
+    UUID senderWallet = walletId(sender);
+    UUID recipientWallet = walletId(recipient);
+    switch (point) {
+      case AFTER_TRANSFER_ROW_LOCK ->
+          doAnswer(callRealThenFail()).when(transferRowsSpy).lockHeldForReview(transferId);
+      case AFTER_WALLET_LOCKS ->
+          doAnswer(callRealThenFail())
+              .when(walletRowsSpy)
+              .lockBothForUpdate(senderWallet, recipientWallet);
+      case AFTER_CAPTURE_OR_RELEASE ->
+          doAnswer(callRealThenFail())
+              .when(usageRowsSpy)
+              .updateUsedAndReserved(
+                  eq(senderWallet), eq("TRANSFER"), any(), any(), any(), anyLong());
+      case AFTER_LEDGER_POSTING -> {
+        AtomicInteger entries = new AtomicInteger();
+        doAnswer(
+                invocation -> {
+                  invocation.callRealMethod();
+                  if (entries.incrementAndGet() == 2) {
+                    throw new IllegalStateException(INJECTED);
+                  }
+                  return null;
+                })
+            .when(ledgerRowsSpy)
+            .insertEntry(any(), any(), any(), any(), any());
+      }
+      case AFTER_STATUS_UPDATE ->
+          doAnswer(callRealThenFail())
+              .when(transferRowsSpy)
+              .updateDecision(eq(transferId), any(), any(), any(), anyLong());
+      case AFTER_REVIEW_ROW ->
+          doAnswer(callRealThenFail())
+              .when(reviewRowsSpy)
+              .insert(eq(transferId), any(), any(), any(), any(), any(), any(), any(), any());
+      case AFTER_AUDIT_ROW ->
+          doAnswer(callRealThenFail())
+              .when(auditRowsSpy)
+              .insert(
+                  argThat(
+                      row ->
+                          row != null
+                              && "TRANSFER_REVIEW".equals(row.action())
+                              && transferId.toString().equals(row.resourceId())));
+      case AT_SENDER_EMAIL_ROW ->
+          doAnswer(callRealThenFail())
+              .when(notificationRowsSpy)
+              .insert(any(), eq(sender.id()), eq(senderEmailKind), any(), any());
+      case AT_RECIPIENT_EMAIL_ROW ->
+          doAnswer(callRealThenFail())
+              .when(notificationRowsSpy)
+              .insert(any(), eq(recipient.id()), eq("TRANSFER_RECEIVED"), any(), any());
+    }
+  }
+
+  /**
+   * Criteria 5, 11, 15: a staff approval that fails at any write point captures nothing, posts
+   * nothing and keeps the hold; the retry completes exactly once.
+   */
+  @ParameterizedTest
+  @EnumSource(ReviewPoint.class)
+  void anApprovalThatFailsAtAnyWritePointLeavesTheHoldAndTheRetryCompletesOnce(ReviewPoint point)
+      throws Exception {
+    Account sender = funded("2000.00");
+    Account recipient = withWallet();
+    Account reviewer = officer();
+    UUID id = held(sender, recipient);
+    Map<String, Object> senderBefore = snapshot(sender);
+    Map<String, Object> recipientBefore = snapshot(recipient);
+    failReviewAt(point, id, sender, recipient, "TRANSFER_SENT");
+
+    MockHttpServletResponse failed = approveReview(id, reviewer);
+
+    assertSystemError(failed);
+    assertThat(snapshot(sender)).as("sender after " + point).isEqualTo(senderBefore);
+    assertThat(snapshot(recipient)).as("recipient after " + point).isEqualTo(recipientBefore);
+    assertThat(transferRow(id)).containsEntry("status", "PENDING_REVIEW");
+    assertThat(ledgerTransactions((String) transferRow(id).get("reference"))).isZero();
+
+    resetSpies();
+    MockHttpServletResponse retried = approveReview(id, reviewer);
+
+    assertThat(retried.getStatus()).as(retried.getContentAsString()).isEqualTo(200);
+    assertThat(transferRow(id)).containsEntry("status", "COMPLETED");
+    assertBalances(sender, "700.00", "0.00");
+    assertBalances(recipient, "1300.00", "0.00");
+    assertThat(transferReserved(sender)).isEqualByComparingTo("0");
+    assertThat(transferUsed(sender)).isEqualByComparingTo(HOLD);
+    assertBalancedPosting((String) transferRow(id).get("reference"), HOLD);
+    assertThat(reviewRows(id)).hasSize(1);
+    assertThat(reviewAuditsOf(id)).hasSize(1);
+    assertThat(transferEmails(sender))
+        .extracting(e -> e.kind())
+        .containsExactly("TRANSFER_HELD", "TRANSFER_SENT");
+    assertThat(transferEmails(recipient))
+        .extracting(e -> e.kind())
+        .containsExactly("TRANSFER_RECEIVED");
+  }
+
+  /** Criteria 11, 15: a rejection that fails at any write point keeps the hold; the retry works. */
+  @ParameterizedTest
+  @EnumSource(
+      value = ReviewPoint.class,
+      names = {"AFTER_LEDGER_POSTING", "AT_RECIPIENT_EMAIL_ROW"},
+      mode = EnumSource.Mode.EXCLUDE)
+  void aRejectionThatFailsAtAnyWritePointKeepsTheHoldAndTheRetryReleasesItOnce(ReviewPoint point)
+      throws Exception {
+    Account sender = funded("2000.00");
+    Account recipient = withWallet();
+    Account reviewer = officer();
+    UUID id = held(sender, recipient);
+    Map<String, Object> senderBefore = snapshot(sender);
+    Map<String, Object> recipientBefore = snapshot(recipient);
+    failReviewAt(point, id, sender, recipient, "TRANSFER_REJECTED");
+
+    MockHttpServletResponse failed = rejectReview(id, "Unusual pattern", reviewer);
+
+    assertSystemError(failed);
+    assertThat(snapshot(sender)).as("sender after " + point).isEqualTo(senderBefore);
+    assertThat(snapshot(recipient)).as("recipient after " + point).isEqualTo(recipientBefore);
+    assertThat(transferRow(id)).containsEntry("status", "PENDING_REVIEW");
+
+    resetSpies();
+    MockHttpServletResponse retried = rejectReview(id, "Unusual pattern", reviewer);
+
+    assertThat(retried.getStatus()).as(retried.getContentAsString()).isEqualTo(200);
+    assertThat(reviewAuditsOf(id)).hasSize(1);
+    assertReleasedOnce(id, sender, recipient, "REJECTED", "TRANSFER_REJECTED");
+  }
+
+  /**
+   * Review case 3 (MVP-ADR-24): an approval that finds the recipient's wallet frozen releases the
+   * hold and rejects with {@code WALLET_UNAVAILABLE}. A failure at any of its write points leaves
+   * nothing; the retry releases the hold exactly once, with the system reason.
+   */
+  @ParameterizedTest
+  @EnumSource(
+      value = ReviewPoint.class,
+      names = {"AFTER_LEDGER_POSTING", "AT_RECIPIENT_EMAIL_ROW"},
+      mode = EnumSource.Mode.EXCLUDE)
+  void anApprovalFindingAnUnavailableWalletThatFailsAtAnyWritePointLeavesNothing(ReviewPoint point)
+      throws Exception {
+    Account sender = funded("2000.00");
+    Account recipient = withWallet();
+    Account reviewer = officer();
+    UUID id = held(sender, recipient);
+    withTriggersDisabled(
+        superuser ->
+            update(
+                superuser,
+                "UPDATE wallet.wallets SET status = 'FROZEN' WHERE customer_id = ?",
+                recipient.id()));
+    Map<String, Object> senderBefore = snapshot(sender);
+    Map<String, Object> recipientBefore = snapshot(recipient);
+    failReviewAt(point, id, sender, recipient, "TRANSFER_REJECTED");
+
+    MockHttpServletResponse failed = approveReview(id, reviewer);
+
+    assertSystemError(failed);
+    assertThat(snapshot(sender)).as("sender after " + point).isEqualTo(senderBefore);
+    assertThat(snapshot(recipient)).as("recipient after " + point).isEqualTo(recipientBefore);
+    assertThat(transferRow(id)).containsEntry("status", "PENDING_REVIEW");
+
+    resetSpies();
+    MockHttpServletResponse retried = approveReview(id, reviewer);
+
+    assertThat(retried.getStatus()).as(retried.getContentAsString()).isEqualTo(200);
+    assertThat(transferRow(id)).containsEntry("rejection_reason_category", "WALLET_UNAVAILABLE");
+    assertThat(reviewRows(id).getFirst())
+        .containsEntry("decided_by", "SYSTEM")
+        .containsEntry("system_reason", "RECIPIENT_WALLET_FROZEN");
+    assertThat(ledgerTransactions((String) transferRow(id).get("reference"))).isZero();
+    assertReleasedOnce(id, sender, recipient, "REJECTED", "TRANSFER_REJECTED");
+  }
+
+  /**
+   * Review case 6 (MVP-ADR-24): a staff approval or rejection after the deadline expires the
+   * transfer as the system, with the reviewer as actor. A failure at any of its write points leaves
+   * nothing and the transfer held; the retry expires it exactly once and still answers {@code 409}.
+   */
+  @ParameterizedTest
+  @EnumSource(
+      value = ReviewPoint.class,
+      names = {"AFTER_LEDGER_POSTING", "AT_RECIPIENT_EMAIL_ROW"},
+      mode = EnumSource.Mode.EXCLUDE)
+  void aLateStaffActionThatFailsAtAnyWritePointLeavesNothingAndTheRetryExpiresOnce(
+      ReviewPoint point) throws Exception {
+    for (String action : List.of("approve", "reject")) {
+      Account sender = funded("2000.00");
+      Account recipient = withWallet();
+      Account reviewer = officer();
+      UUID id = held(sender, recipient);
+      overdue(id, 60);
+      Map<String, Object> senderBefore = snapshot(sender);
+      Map<String, Object> recipientBefore = snapshot(recipient);
+      failReviewAt(point, id, sender, recipient, "TRANSFER_EXPIRED");
+
+      MockHttpServletResponse failed =
+          action.equals("approve")
+              ? approveReview(id, reviewer)
+              : rejectReview(id, "Unusual pattern", reviewer);
+
+      assertSystemError(failed);
+      assertThat(snapshot(sender)).as(action + " sender after " + point).isEqualTo(senderBefore);
+      assertThat(snapshot(recipient))
+          .as(action + " recipient after " + point)
+          .isEqualTo(recipientBefore);
+      assertThat(transferRow(id)).containsEntry("status", "PENDING_REVIEW");
+
+      resetSpies();
+      MockHttpServletResponse retried =
+          action.equals("approve")
+              ? approveReview(id, reviewer)
+              : rejectReview(id, "Unusual pattern", reviewer);
+
+      assertThat(retried.getStatus()).as(retried.getContentAsString()).isEqualTo(409);
+      assertThat(errorCode(retried)).isEqualTo("INVALID_TRANSFER_STATE");
+      assertThat(reviewRows(id).getFirst())
+          .containsEntry("action", "EXPIRE")
+          .containsEntry("requested_action", action.equals("approve") ? "APPROVE" : "REJECT")
+          .containsEntry("actor_user_id", reviewer.id())
+          .containsEntry("reason", null);
+      assertThat(reviewAuditsOf(id).getFirst()).containsEntry("actor_type", "STAFF");
+      assertReleasedOnce(id, sender, recipient, "EXPIRED", "TRANSFER_EXPIRED");
+    }
   }
 
   /** The hold of {@code id} was released exactly once, by one decision with one of each record. */

@@ -19,9 +19,11 @@ import org.springframework.stereotype.Component;
  *       receiver;
  *   <li>{@code PENDING_REVIEW}: {@code TRANSFER_HELD} to the sender only; the receiver hears
  *       nothing before completion;
+ *   <li>{@code REJECTED} (a staff rejection, or an approval that found a wallet frozen or closed):
+ *       {@code TRANSFER_REJECTED} to the sender only; never the reviewer's reason or the category;
  *   <li>{@code CANCELLED}: {@code TRANSFER_CANCELLED} to the sender;
- *   <li>{@code EXPIRED} (the job, or a cancel after the deadline): {@code TRANSFER_EXPIRED} to the
- *       sender.
+ *   <li>{@code EXPIRED} (the job, or a cancel, staff approve or staff reject after the deadline):
+ *       {@code TRANSFER_EXPIRED} to the sender.
  * </ul>
  *
  * Never for {@code BLOCKED} (no way to learn the risk rules), a stored refusal, a replay or a
@@ -43,8 +45,7 @@ class TransferEmails {
   /**
    * Writes the emails of {@code row}'s status, as stored by this transaction.
    *
-   * @throws IllegalStateException for a status that sends no email from here ({@code BLOCKED}) or
-   *     is decided in PR 5b ({@code REJECTED})
+   * @throws IllegalStateException for {@code BLOCKED}, which never sends an email (Q9)
    */
   void statusChanged(TransferRow row) {
     Objects.requireNonNull(row, "row");
@@ -56,7 +57,8 @@ class TransferEmails {
       case PENDING_REVIEW -> send(row.senderCustomerId(), EmailKind.TRANSFER_HELD, row);
       case CANCELLED -> send(row.senderCustomerId(), EmailKind.TRANSFER_CANCELLED, row);
       case EXPIRED -> send(row.senderCustomerId(), EmailKind.TRANSFER_EXPIRED, row);
-      case BLOCKED, REJECTED ->
+      case REJECTED -> send(row.senderCustomerId(), EmailKind.TRANSFER_REJECTED, row);
+      case BLOCKED ->
           throw new IllegalStateException("no transfer email for status " + row.status());
     }
   }

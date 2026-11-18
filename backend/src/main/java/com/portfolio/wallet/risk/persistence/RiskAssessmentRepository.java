@@ -2,6 +2,8 @@ package com.portfolio.wallet.risk.persistence;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -110,6 +112,55 @@ public class RiskAssessmentRepository {
         .param("code", ruleCode)
         .param("weight", weight)
         .update();
+  }
+
+  /** An assessment as stored, for the staff review (Internal, staff-only data). */
+  public record AssessmentRow(UUID id, int score, String decision, Instant assessedAt) {
+
+    /** Leaves the score and decision out of logs. */
+    @Override
+    public String toString() {
+      return "AssessmentRow[id=" + id + "]";
+    }
+  }
+
+  /** One triggered rule of an assessment (staff-only). */
+  public record RuleHitRow(String ruleCode, int weight) {
+
+    @Override
+    public String toString() {
+      return "RuleHitRow[…]";
+    }
+  }
+
+  /** The assessments with these ids, as committed now. */
+  public List<AssessmentRow> findAssessments(Collection<UUID> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    return jdbc.sql(
+            "SELECT id, score, decision, assessed_at FROM risk.risk_assessments WHERE id IN (:ids)")
+        .param("ids", List.copyOf(ids))
+        .query(
+            (rs, row) ->
+                new AssessmentRow(
+                    rs.getObject("id", UUID.class),
+                    rs.getInt("score"),
+                    rs.getString("decision"),
+                    Timestamps.read(rs, "assessed_at")))
+        .list();
+  }
+
+  /** The rule hits of an assessment, highest weight first, then by rule code. */
+  public List<RuleHitRow> findRuleHits(UUID assessmentId) {
+    return jdbc.sql(
+            """
+            SELECT rule_code, weight FROM risk.risk_rule_hits WHERE assessment_id = :assessment
+            ORDER BY weight DESC, rule_code
+            """)
+        .param("assessment", assessmentId)
+        .query((rs, row) -> new RuleHitRow(rs.getString("rule_code"), rs.getInt("weight")))
+        .list();
   }
 
   /** Opens an investigation of the assessment; the database sets {@code OPEN} and the time. */

@@ -21,7 +21,8 @@ import java.util.Set;
  * reveal nothing about the review or the account; the rejection reason is shown only after signing
  * in (documentations/08 §4B.2 Q13). Each states the time of the change in the business zone (owner,
  * 2026-11-03, K2): delivery order is not guaranteed, and the time tells the reader which change
- * came last.
+ * came last. The exception is the review reminder ({@code TRANSFER_REVIEW_EXPIRING}), which changes
+ * nothing: it states when the reminder was written.
  *
  * <p>Money emails (MVP-ADR-24 amendment "Emails (Q9)") state the amount, the currency and the
  * server reference ({@link MoneyEmailValues}), and nothing else: never a balance, a name, a wallet
@@ -177,6 +178,21 @@ final class OutboxTemplates {
                 + " it."
                 + reference(values)
                 + " You can send a new transfer if you wish.");
+    // To compliance officers (MVP-ADR-24 "Expiry"): the same three values as every money email.
+    // The time is the reminder's own; the deadline is not a Q9 value, so the officer reads it in
+    // the review queue. Nothing about the parties, the description or the risk assessment.
+    money(
+        EmailKind.TRANSFER_REVIEW_EXPIRING,
+        "A transfer waiting for review will expire",
+        (time, values) ->
+            "As of "
+                + time
+                + ", a transfer of "
+                + money(values)
+                + " is still waiting for review. It will expire, and the held amount will be"
+                + " released, unless it is approved or rejected before its review deadline."
+                + reference(values)
+                + " Sign in to the transfer review queue to see the deadline and decide it.");
   }
 
   private OutboxTemplates() {}

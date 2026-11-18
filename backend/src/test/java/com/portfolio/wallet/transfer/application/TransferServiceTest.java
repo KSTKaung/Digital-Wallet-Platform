@@ -95,7 +95,7 @@ class TransferServiceTest {
           risk,
           transfers,
           audit,
-          new TransferReviewProperties(Duration.ofHours(24)),
+          new TransferReviewProperties(Duration.ofHours(24), Duration.ofHours(12)),
           json,
           new TransferEmails(outbox));
 

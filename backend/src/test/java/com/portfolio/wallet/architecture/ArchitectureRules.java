@@ -2,7 +2,10 @@ package com.portfolio.wallet.architecture;
 
 import static com.tngtech.archunit.base.DescribedPredicate.anyElementThat;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideOutsideOfPackage;
 import static com.tngtech.archunit.core.domain.properties.CanBeAnnotated.Predicates.annotatedWith;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
@@ -204,6 +207,31 @@ final class ArchitectureRules {
         .orShould()
         .haveRawParameterTypes(anyElementThat(resideInAPackage("..persistence..")))
         .as("public application methods neither take nor return persistence types");
+  }
+
+  /**
+   * The history module reads the ledger through its application service, after resolving the
+   * caller's wallet through the wallet module's (documentations/06 MVP-ADR-11 amendment; doc 07
+   * D06; owner, 2026-11-14, PR 5b step 11). Within the application it depends only on {@code
+   * common}, {@code wallet.application}, {@code ledger.application} and itself. Classes outside the
+   * application root (JDK, Spring, Jakarta) are not restricted here, as in the other rules.
+   */
+  static ArchRule transactionReadsOnlyWalletAndLedger(String root) {
+    return classes()
+        .that()
+        .resideInAPackage(root + ".transaction..")
+        .should()
+        .onlyDependOnClassesThat(
+            resideOutsideOfPackage(root + "..")
+                .or(
+                    resideInAnyPackage(
+                        root + ".common..",
+                        root + ".wallet.application..",
+                        root + ".ledger.application..",
+                        root + ".transaction..")))
+        .as(
+            "the transaction module depends only on common, wallet.application,"
+                + " ledger.application and itself");
   }
 
   static ArchRule noCyclesBetweenModules(String root) {

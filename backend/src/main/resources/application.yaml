@@ -116,6 +116,19 @@ app:
   scheduling:
     pool-size: 2
     await-termination: 30s
+  # The scheduled reconciliation (documentations/06 MVP-ADR-03 checks 1-5 and Σ DEBIT = Σ CREDIT;
+  # MVP-ADR-24 "Jobs (Q11)"; doc 07 D18): reads every module in one read-only REPEATABLE READ
+  # transaction with the D14 timeouts, logs each mismatch at ERROR as RECONCILIATION_MISMATCH and a
+  # failed run as RECONCILIATION_FAILED. Only reads and logs, so several instances are safe.
+  reconciliation:
+    # Turns the scheduled job on; tests turn it off and call the reconciliation directly.
+    enabled: true
+    # The first run, this long after startup (owner, 2026-11-15). Checked at startup: positive and
+    # at most the interval.
+    initial-delay: 5m
+    # How often the job runs: hourly (Q11, MVP value), counted from the end of the previous run.
+    # Checked at startup: positive.
+    interval: 1h
   # The business calendar of every module (documentations/06 MVP-ADR-22): "today" for the
   # date-of-birth check and the daily limits, and the zone in which emails state a time.
   business-zone: Asia/Bangkok
@@ -177,6 +190,21 @@ app:
     # seconds, at least 1s; checked at startup.
     review:
       duration: 24h
+      # After this long in PENDING_REVIEW, counted from held_at, every active compliance officer
+      # gets one reminder that the transfer will expire: 12 hours (MVP-ADR-24 "Expiry"; doc 07
+      # D28). Whole seconds, at least 1s, shorter than duration; checked at startup.
+      reminder-after: 12h
+    # The review reminder job (documentations/06 MVP-ADR-24 "Expiry", "Jobs (Q11)"): one outbox row
+    # per held transfer and active compliance officer under a deterministic event id, so a second
+    # run or instance adds nothing. Takes no money lock and changes no transfer.
+    review-reminder:
+      # Turns the scheduled job on; tests turn it off and call the reminder directly.
+      enabled: true
+      # How often the job runs: every 1 minute (Q11, MVP value).
+      interval: 1m
+      # The most transfers one run writes reminders for (already reminded, skipped and failed ones
+      # do not count); the rest wait for the next run. 500 (owner, 2026-11-14).
+      max-per-run: 500
     # Expiry of held transfers past their deadline (documentations/06 MVP-ADR-24 "Expiry", "Jobs
     # (Q11)"): one transfer per transaction, FOR UPDATE SKIP LOCKED, safe with several instances.
     expiry:

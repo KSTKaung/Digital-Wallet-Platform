@@ -62,7 +62,9 @@ class SecurityConfigWebTest {
   @Test
   void unauthenticatedResponseDoesNotDependOnResourceExistence() throws Exception {
     for (String path :
-        new String[] {"/api/v1/wallet", "/api/v1/transfers/123", "/api/v1/no-such-thing"}) {
+        new String[] {
+          "/api/v1/wallet", "/api/v1/transfers/123", "/api/v1/transactions", "/api/v1/no-such-thing"
+        }) {
       mvc.perform(get(path))
           .andExpect(status().isUnauthorized())
           .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"))

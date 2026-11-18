@@ -102,7 +102,7 @@ class NotificationOutboxIT extends DatabaseIntegrationTest {
         if (FAILING_LOOKUPS.contains(userId)) {
           throw new DataAccessResourceFailureException("lookup failed");
         }
-        return real.emailOf(userId, timeout);
+        return real.lookup(userId, timeout);
       };
     }
   }
@@ -123,9 +123,13 @@ class NotificationOutboxIT extends DatabaseIntegrationTest {
     FAILING_LOOKUPS.clear();
   }
 
-  /** A customer account, whose email the dispatcher looks up when it sends. */
+  /**
+   * An ACTIVE customer account, whose email the dispatcher looks up when it sends: the outbox sends
+   * only to ACTIVE accounts (owner, 2026-11-14, decision 8), as every account the application
+   * writes outbox rows for is.
+   */
   private Map<String, Object> account() throws Exception {
-    Map<String, Object> user = validUser();
+    Map<String, Object> user = with(validUser(), "status", "ACTIVE");
     insert("auth.users", user);
     return user;
   }

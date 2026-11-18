@@ -83,10 +83,19 @@ class TransferEmailsTest {
     verifyNoMoreInteractions(outbox);
   }
 
-  /** A block never emails (Q9); a rejection is emailed by the 5b review, not from here. */
+  /** 5b: a rejection (staff or wallet unavailable) emails the sender only, never the receiver. */
+  @Test
+  void aRejectedTransferEmailsTheSenderOnly() {
+    emails.statusChanged(row("REJECTED"));
+
+    verify(outbox).enqueue(SENDER, EmailKind.TRANSFER_REJECTED, VALUES);
+    verifyNoMoreInteractions(outbox);
+  }
+
+  /** A block never emails (Q9). */
   @ParameterizedTest
-  @ValueSource(strings = {"BLOCKED", "REJECTED"})
-  void noEmailFromHereForABlockOrARejection(String status) {
+  @ValueSource(strings = {"BLOCKED"})
+  void noEmailForABlock(String status) {
     assertThatThrownBy(() -> emails.statusChanged(row(status)))
         .isInstanceOf(IllegalStateException.class);
 

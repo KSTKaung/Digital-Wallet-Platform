@@ -9,6 +9,7 @@ import com.portfolio.wallet.transfer.persistence.TransferRow;
 import java.net.InetAddress;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -21,13 +22,15 @@ import java.util.UUID;
  *       PENDING_REVIEW} row, in the refusal's own transaction with the {@code BLOCKED} row or a
  *       stored refusal, and independently for a failed risk assessment;
  *   <li>{@value #TRANSFER_REVIEW}: an outcome of a held transfer (5a: the customer cancel, the
- *       expiry a late cancel causes, and the expiry job with actor {@code SYSTEM}; 5b adds the
- *       staff decisions), in the transaction of the outcome, with the five facts of the review row
- *       as separate fields.
+ *       expiry a late cancel causes, and the expiry job with actor {@code SYSTEM}; 5b: the staff
+ *       approval and rejection, the system rejection of an approval that found a wallet
+ *       unavailable, and the expiry a late staff action causes, with actor {@code STAFF}), in the
+ *       transaction of the outcome, with the five facts of the review row as separate fields.
  * </ul>
  *
  * Values are ids, states, amounts and codes; never the description, the risk score, rule codes or
- * weights (those stay in the {@code risk} schema), a name or a wallet number.
+ * weights (those stay in the {@code risk} schema), a name, a wallet number or a reviewer's reason
+ * text (staff-only, in {@code risk.risk_reviews.reason}).
  */
 final class TransferAudit {
 
@@ -92,35 +95,66 @@ final class TransferAudit {
   }
 
   /**
+   * The facts of one review row as the audit row records them, each in a field of its own
+   * (MVP-ADR-24 "Audit of review outcomes", D2): the actual outcome, the decision source, the
+   * requested action (null only for the expiry job), and the staff rejection category or the system
+   * reason (each null unless it applies). Never the reviewer's own text.
+   */
+  record ReviewFacts(
+      String action,
+      String decidedBy,
+      String requestedAction,
+      String reasonCategory,
+      String systemReason) {
+
+    ReviewFacts {
+      Objects.requireNonNull(action, "action");
+      Objects.requireNonNull(decidedBy, "decidedBy");
+      if (reasonCategory != null && systemReason != null) {
+        throw new IllegalArgumentException(
+            "a staff category and a system reason never go together");
+      }
+    }
+  }
+
+  /**
    * An outcome of a held transfer, with the facts of its review row (MVP-ADR-24 "Audit of review
-   * outcomes"): the actual outcome, the decision source, the requested action and the system
-   * reason; the actor is the audit row's actor.
+   * outcomes"); the actor is the audit row's actor. The customer-facing category of a rejection is
+   * recorded as well.
    *
-   * @param systemReason null unless the system decided
+   * @param ledgerTransactionId the posting of an approval that captured the hold; null otherwise
    */
   static AuditEntry reviewOutcome(
       TransferRow before,
       TransferRow after,
       UUID actorId,
       ActorType actorType,
-      String action,
-      String decidedBy,
-      String requestedAction,
-      String systemReason,
+      ReviewFacts facts,
+      UUID ledgerTransactionId,
       InetAddress clientIp) {
+    Objects.requireNonNull(facts, "facts");
     Map<String, Object> value = new LinkedHashMap<>();
     value.put(STATUS, after.status());
-    value.put("action", action);
-    value.put("decidedBy", decidedBy);
-    if (requestedAction != null) {
-      value.put("requestedAction", requestedAction);
+    value.put("action", facts.action());
+    value.put("decidedBy", facts.decidedBy());
+    if (facts.requestedAction() != null) {
+      value.put("requestedAction", facts.requestedAction());
     }
-    if (systemReason != null) {
-      value.put("systemReason", systemReason);
+    if (facts.reasonCategory() != null) {
+      value.put("reasonCategory", facts.reasonCategory());
+    }
+    if (facts.systemReason() != null) {
+      value.put("systemReason", facts.systemReason());
+    }
+    if (after.rejectionReasonCategory() != null) {
+      value.put("rejectionReasonCategory", after.rejectionReasonCategory());
     }
     value.put("amount", after.amount().toPlainString());
     value.put("currency", after.currency());
     value.put("limitDate", after.limitDate().toString());
+    if (ledgerTransactionId != null) {
+      value.put("ledgerTransactionId", ledgerTransactionId.toString());
+    }
     return AuditEntry.of(actorType, TRANSFER_REVIEW, TRANSFER, AuditResult.SUCCESS)
         .withActor(actorId)
         .withResourceId(after.id().toString())

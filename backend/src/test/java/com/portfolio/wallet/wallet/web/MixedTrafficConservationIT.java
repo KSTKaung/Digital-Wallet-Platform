@@ -100,6 +100,9 @@ class MixedTrafficConservationIT extends MoneyFlowSupport {
     funded(alice, "2000.00");
     funded(bob, "2000.00");
     BigDecimal clearingBefore = cashClearingBalance();
+    // Other tests leave deliberately unbalanced rows in the shared ledger (doc 08 §5): only this
+    // test's own change to the imbalance is asserted.
+    BigDecimal imbalanceBefore = ledgerImbalance();
     String aliceIp = randomIp();
     String bobIp = randomIp();
 
@@ -135,7 +138,7 @@ class MixedTrafficConservationIT extends MoneyFlowSupport {
     BigDecimal walletsGained = new BigDecimal("700.00");
     assertThat(cashClearingBalance().subtract(clearingBefore))
         .isEqualByComparingTo(walletsGained.negate());
-    assertThat(ledgerImbalance()).isEqualByComparingTo("0");
+    assertThat(ledgerImbalance()).isEqualByComparingTo(imbalanceBefore);
     // Each lookup counted once.
     assertThat(
             jdbc.queryForObject(

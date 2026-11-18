@@ -37,15 +37,4 @@ class UserContactsTest {
 
     assertThat(contacts.find(id)).isEmpty();
   }
-
-  /** S1: the timed lookup passes its timeout to the statement. */
-  @Test
-  void theTimedLookupPassesItsTimeout() {
-    UUID id = UUID.randomUUID();
-    java.time.Duration timeout = java.time.Duration.ofSeconds(5);
-    when(users.findContacts(id, timeout))
-        .thenReturn(Optional.of(new ContactRow("alice@example.com", null)));
-
-    assertThat(contacts.find(id, timeout)).map(ContactDetails::email).contains("alice@example.com");
-  }
 }

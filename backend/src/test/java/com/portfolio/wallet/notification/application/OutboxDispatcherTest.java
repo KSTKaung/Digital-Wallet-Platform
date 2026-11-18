@@ -86,7 +86,7 @@ class OutboxDispatcherTest {
     when(notifications.scheduleRetry(any(), anyInt(), any(), anyString())).thenReturn(1);
     when(notifications.markFailed(any(), anyInt(), anyString())).thenReturn(1);
     when(notifications.failExpiredLastClaims(any(), anyInt())).thenReturn(List.of());
-    when(recipients.emailOf(user, LOOKUP)).thenReturn(Optional.of(ADDRESS));
+    when(recipients.lookup(user, LOOKUP)).thenReturn(RecipientAddress.active(ADDRESS));
   }
 
   /** A row as the claim returns it: {@code claim} is its attempt count after the claim. */
@@ -267,7 +267,7 @@ class OutboxDispatcherTest {
   void aMissingAddressFollowsTheSameRetryPolicy() {
     OutboxRow row = claimed(1);
     claimable(row);
-    when(recipients.emailOf(user, LOOKUP)).thenReturn(Optional.empty());
+    when(recipients.lookup(user, LOOKUP)).thenReturn(RecipientAddress.notFound());
 
     dispatcher.dispatch(row.eventId());
 
@@ -280,12 +280,50 @@ class OutboxDispatcherTest {
     assertThat(sender.messages()).isEmpty();
   }
 
+  /**
+   * Decision 8 (owner, 2026-11-14): a recipient whose account is no longer ACTIVE gets nothing; the
+   * row is FAILED at once on its first claim, with the fixed reason and no retry, and the log names
+   * the event and kind only.
+   */
+  @Test
+  void aRecipientNoLongerActiveIsNeverSentToAndTheRowFailsAtOnce(CapturedOutput output) {
+    OutboxRow row = claimed(1);
+    claimable(row);
+    when(recipients.lookup(user, LOOKUP)).thenReturn(RecipientAddress.notActive());
+
+    dispatcher.dispatch(row.eventId());
+
+    verify(notifications).markFailed(row.eventId(), 1, OutboxDispatcher.RECIPIENT_NOT_ACTIVE);
+    verify(notifications, never()).scheduleRetry(any(), anyInt(), any(), anyString());
+    assertThat(sender.messages()).isEmpty();
+    assertThat(OutboxDispatcher.RECIPIENT_NOT_ACTIVE).isEqualTo("RecipientNotActive");
+    assertThat(output)
+        .contains("recipient not active, not sent: eventId=" + row.eventId())
+        .doesNotContain(user.toString())
+        .doesNotContain(ADDRESS);
+  }
+
+  /** The not-active outcome is recorded with the claim's fencing token, like any result. */
+  @Test
+  void aNotActiveResultFromAnOlderClaimIsIgnored(CapturedOutput output) {
+    OutboxRow row = claimed(2);
+    claimable(row);
+    when(recipients.lookup(user, LOOKUP)).thenReturn(RecipientAddress.notActive());
+    when(notifications.markFailed(row.eventId(), 2, OutboxDispatcher.RECIPIENT_NOT_ACTIVE))
+        .thenReturn(0);
+
+    dispatcher.dispatch(row.eventId());
+
+    assertThat(output).contains("result from an older claim ignored");
+    assertThat(sender.messages()).isEmpty();
+  }
+
   /** A database error in the lookup runs outside any transaction and fails the attempt (N1). */
   @Test
   void aDatabaseErrorInTheLookupFailsTheAttempt() {
     OutboxRow row = claimed(MAX);
     claimable(row);
-    when(recipients.emailOf(user, LOOKUP)).thenThrow(new DataAccessResourceFailureException("db"));
+    when(recipients.lookup(user, LOOKUP)).thenThrow(new DataAccessResourceFailureException("db"));
 
     dispatcher.dispatch(row.eventId());
 
@@ -301,12 +339,12 @@ class OutboxDispatcherTest {
   void aLookupTimeoutFailsTheAttempt() {
     OutboxRow row = claimed(1);
     claimable(row);
-    when(recipients.emailOf(user, LOOKUP))
+    when(recipients.lookup(user, LOOKUP))
         .thenThrow(new org.springframework.dao.QueryTimeoutException("canceled"));
 
     dispatcher.dispatch(row.eventId());
 
-    verify(recipients).emailOf(user, properties.addressLookupTimeout());
+    verify(recipients).lookup(user, properties.addressLookupTimeout());
     verify(notifications)
         .scheduleRetry(
             row.eventId(), 1, clock.instant().plus(Duration.ofMinutes(1)), "QueryTimeoutException");
@@ -330,7 +368,7 @@ class OutboxDispatcherTest {
     claimable(last);
     dispatcher.dispatch(last.eventId());
     verify(notifications).markFailed(last.eventId(), MAX, OutboxDispatcher.UNKNOWN_KIND);
-    verify(recipients, never()).emailOf(any(), any());
+    verify(recipients, never()).lookup(any(), any());
   }
 
   /** The recorded failure is cut to the column size (varchar(100), V9). */
@@ -340,7 +378,7 @@ class OutboxDispatcherTest {
     claimable(row);
     class AVeryLongExceptionNameThatGoesOnAndOnAndOnWellBeyondTheOneHundredCharactersTheColumnHoldsSoItMustBeCut
         extends RuntimeException {}
-    when(recipients.emailOf(user, LOOKUP))
+    when(recipients.lookup(user, LOOKUP))
         .thenThrow(
             new AVeryLongExceptionNameThatGoesOnAndOnAndOnWellBeyondTheOneHundredCharactersTheColumnHoldsSoItMustBeCut());
 
@@ -440,7 +478,7 @@ class OutboxDispatcherTest {
     OutboxRow broken =
         new OutboxRow(UUID.randomUUID(), UUID.randomUUID(), "KYC_REJECTED", 1, OCCURRED, Map.of());
     OutboxRow good = claimed(1);
-    when(recipients.emailOf(broken.userId(), LOOKUP))
+    when(recipients.lookup(broken.userId(), LOOKUP))
         .thenThrow(new DataAccessResourceFailureException("db"));
     when(notifications.claimNextDue(any(), any(), anyInt()))
         .thenReturn(Optional.of(broken))

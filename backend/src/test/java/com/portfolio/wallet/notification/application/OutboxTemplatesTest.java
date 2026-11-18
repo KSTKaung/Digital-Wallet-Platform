@@ -66,7 +66,8 @@ class OutboxTemplatesTest {
         "TRANSFER_HELD",
         "TRANSFER_REJECTED",
         "TRANSFER_CANCELLED",
-        "TRANSFER_EXPIRED"
+        "TRANSFER_EXPIRED",
+        "TRANSFER_REVIEW_EXPIRING"
       })
   void aMoneyEmailStatesTheAmountTheReferenceAndTheTimeAndNothingAboutRisk(EmailKind kind) {
     EmailMessage message =
@@ -93,6 +94,26 @@ class OutboxTemplatesTest {
         .contains("not completed", "Sign in to see the reason");
     assertThat(money(EmailKind.TRANSFER_CANCELLED).body()).contains("cancelled");
     assertThat(money(EmailKind.TRANSFER_EXPIRED).body()).contains("expired");
+  }
+
+  /**
+   * The staff reminder (MVP-ADR-24 "Expiry"): the transfer waits for review and will expire unless
+   * decided; the reminder's own time, the amount and the reference, and nothing about the parties,
+   * the description or the assessment. The deadline is not a Q9 value; the queue shows it.
+   */
+  @Test
+  void theReviewReminderSaysTheTransferWillExpireUnlessDecided() {
+    EmailMessage message = money(EmailKind.TRANSFER_REVIEW_EXPIRING);
+
+    assertThat(message.subject()).isEqualTo("A transfer waiting for review will expire");
+    assertThat(message.body())
+        .startsWith("As of 4 November 2026 at 00:30:00 (Asia/Bangkok time), a transfer of")
+        .contains("1,234,567.50 THB", "still waiting for review", "will expire")
+        .contains("approved or rejected before its review deadline")
+        .contains("Reference: " + REFERENCE)
+        .contains("Sign in to the transfer review queue");
+    assertThat(message.body().toLowerCase(java.util.Locale.ROOT))
+        .doesNotContain("sender", "recipient", "wallet", "description", "name");
   }
 
   /** A row whose values do not match its kind fails its attempt; nothing half-rendered is sent. */

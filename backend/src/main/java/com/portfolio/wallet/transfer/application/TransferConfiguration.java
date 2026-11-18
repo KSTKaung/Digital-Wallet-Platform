@@ -4,13 +4,14 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Binds {@link TransferIdempotencyProperties}, {@link TransferReviewProperties} and {@link
- * TransferExpiryProperties}.
+ * Binds {@link TransferIdempotencyProperties}, {@link TransferReviewProperties}, {@link
+ * TransferExpiryProperties} and {@link TransferReviewReminderProperties}.
  */
 @Configuration
 @EnableConfigurationProperties({
   TransferIdempotencyProperties.class,
   TransferReviewProperties.class,
-  TransferExpiryProperties.class
+  TransferExpiryProperties.class,
+  TransferReviewReminderProperties.class
 })
 class TransferConfiguration {}

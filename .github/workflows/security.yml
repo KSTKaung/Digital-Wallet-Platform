@@ -106,8 +106,13 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-      # Policy: the full report (all severities) is printed; high and critical fail the build.
+      # Policy: the full report (all severities) is printed; high and critical fail the build
+      # unless the advisory is an accepted risk listed in .github/npm-audit-allowlist.json.
       # Do not add --omit, `npm audit fix --force` or continue-on-error to get green: fix the
-      # dependency, or document an accepted risk in documentations/06 and in the PR.
-      - name: npm audit (fails on high or critical)
-        run: npm audit --audit-level=high
+      # dependency, or have the owner accept the risk in documentations/06 (MVP-ADR-15) and in
+      # the PR, then add that advisory id (only that one) to the allowlist.
+      # The report step never fails on its own; the gate step below decides.
+      - name: npm audit report (all severities)
+        run: npm audit || true
+      - name: npm audit gate (fails on high or critical not in the allowlist)
+        run: node ../.github/scripts/npm-audit-gate.mjs ../.github/npm-audit-allowlist.json

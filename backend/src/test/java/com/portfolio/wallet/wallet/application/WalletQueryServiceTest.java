@@ -128,4 +128,21 @@ class WalletQueryServiceTest {
         .extracting(e -> ((ApiException) e).errorCode())
         .isEqualTo(ErrorCode.WALLET_NOT_FOUND);
   }
+
+  /** For {@code GET /transactions} (MVP-ADR-11): the id in any status, empty before approval. */
+  @ParameterizedTest
+  @ValueSource(strings = {"ACTIVE", "FROZEN"})
+  void theWalletIdInAnyStatus(String status) {
+    stored("BASIC", status, "0", "0");
+    UUID id = repository.findByCustomer(CUSTOMER).orElseThrow().id();
+
+    assertThat(service.findWalletId(CUSTOMER)).contains(id);
+  }
+
+  @Test
+  void noWalletIdBeforeApproval() {
+    when(repository.findByCustomer(CUSTOMER)).thenReturn(Optional.empty());
+
+    assertThat(service.findWalletId(CUSTOMER)).isEmpty();
+  }
 }
