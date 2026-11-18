@@ -116,6 +116,19 @@ app:
   scheduling:
     pool-size: 2
     await-termination: 30s
+  # The scheduled reconciliation (documentations/06 MVP-ADR-03 checks 1-5 and Σ DEBIT = Σ CREDIT;
+  # MVP-ADR-24 "Jobs (Q11)"; doc 07 D18): reads every module in one read-only REPEATABLE READ
+  # transaction with the D14 timeouts, logs each mismatch at ERROR as RECONCILIATION_MISMATCH and a
+  # failed run as RECONCILIATION_FAILED. Only reads and logs, so several instances are safe.
+  reconciliation:
+    # Turns the scheduled job on; tests turn it off and call the reconciliation directly.
+    enabled: true
+    # The first run, this long after startup (owner, 2026-11-15). Checked at startup: positive and
+    # at most the interval.
+    initial-delay: 5m
+    # How often the job runs: hourly (Q11, MVP value), counted from the end of the previous run.
+    # Checked at startup: positive.
+    interval: 1h
   # The business calendar of every module (documentations/06 MVP-ADR-22): "today" for the
   # date-of-birth check and the daily limits, and the zone in which emails state a time.
   business-zone: Asia/Bangkok

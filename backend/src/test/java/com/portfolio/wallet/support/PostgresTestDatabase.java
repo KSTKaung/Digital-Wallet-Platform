@@ -85,6 +85,8 @@ public final class PostgresTestDatabase {
     registry.add("app.transfer.expiry.enabled", () -> false);
     // And the review reminder, so no background run writes reminders their outbox checks would see.
     registry.add("app.transfer.review-reminder.enabled", () -> false);
+    // And the reconciliation, so its runs and ERROR lines come only from the tests that call it.
+    registry.add("app.reconciliation.enabled", () -> false);
     TestSecrets.values().forEach((name, value) -> registry.add(name, () -> value));
   }
 
