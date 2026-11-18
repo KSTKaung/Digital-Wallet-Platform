@@ -21,7 +21,8 @@ import java.util.Set;
  * reveal nothing about the review or the account; the rejection reason is shown only after signing
  * in (documentations/08 §4B.2 Q13). Each states the time of the change in the business zone (owner,
  * 2026-11-03, K2): delivery order is not guaranteed, and the time tells the reader which change
- * came last.
+ * came last. The exception is the review reminder ({@code TRANSFER_REVIEW_EXPIRING}), which changes
+ * nothing: it states when the reminder was written.
  *
  * <p>Money emails (MVP-ADR-24 amendment "Emails (Q9)") state the amount, the currency and the
  * server reference ({@link MoneyEmailValues}), and nothing else: never a balance, a name, a wallet

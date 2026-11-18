@@ -55,7 +55,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * in memory for the comparison: one small row per wallet, completed movement, ever-held transfer,
  * review and ledger transaction. Each statement is bounded by the D14 {@code statement_timeout};
  * the snapshot is held for the length of the reads only, the comparison runs after it closed. Sized
- * for the MVP, not for paging; see the step 12 report.
+ * for the MVP, not for paging; see documentations/06 MVP-ADR-03 "Known MVP limits".
  *
  * <h2>Logging</h2>
  *

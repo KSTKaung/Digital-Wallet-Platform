@@ -10,11 +10,12 @@ import java.util.UUID;
 
 /**
  * The outcome of a held transfer to record with {@link RiskReviewService#record}, for callers
- * outside the risk module (the {@code transfer} module in PR 5a, {@code admin} in 5b), which may
- * not use {@code risk.domain}. Each factory is one case of the seven of documentations/06
- * MVP-ADR-24 amendment "Review outcomes" (D2) and builds the domain's {@link ReviewOutcome}, so an
- * invalid combination cannot be constructed. {@link #toString()} leaves the actor and the reason
- * out.
+ * outside the risk module: the {@code transfer} module's {@code HeldTransferDecider}, for the
+ * cancel, the expiry and the staff review ({@code admin} starts the review through {@code
+ * transfer}'s {@code TransferReviewDecisionService} and never calls this module), which may not use
+ * {@code risk.domain}. Each factory is one case of the seven of documentations/06 MVP-ADR-24
+ * amendment "Review outcomes" (D2) and builds the domain's {@link ReviewOutcome}, so an invalid
+ * combination cannot be constructed. {@link #toString()} leaves the actor and the reason out.
  */
 public final class RiskReviewOutcome {
 

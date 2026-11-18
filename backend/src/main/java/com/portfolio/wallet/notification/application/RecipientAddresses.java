@@ -10,8 +10,11 @@ import java.util.UUID;
  * depend on {@code auth}, which already depends on it; {@code auth.application} implements it.
  *
  * <p>The lookup is also the send-time check of the recipient (owner, 2026-11-14, decision 8): an
- * address is returned only for an account whose status is {@code ACTIVE}, so an email is never sent
- * to an account that was frozen, suspended or otherwise deactivated after its row was written.
+ * address is returned only for an account whose status is {@code ACTIVE}, so an email is not sent
+ * once the lookup sees the account is not {@code ACTIVE} (frozen, suspended or otherwise
+ * deactivated after its row was written). The status is read without a lock just before the send,
+ * so an account deactivated between that read and the SMTP send can still get that one email
+ * (accepted; documentations/06 MVP-ADR-24 "Emails (Q9)", amendment of 2026-11-14).
  *
  * <p>The address is personal data: the dispatcher passes it to the mail sender and never logs it.
  */

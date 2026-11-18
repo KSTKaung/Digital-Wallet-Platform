@@ -2,6 +2,7 @@ package com.portfolio.wallet.common.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.wallet.admin.application.ReconciliationSchedule;
 import com.portfolio.wallet.auth.application.AuthPurgeSchedule;
 import com.portfolio.wallet.notification.application.OutboxSchedule;
 import com.portfolio.wallet.support.DatabaseIntegrationTest;
@@ -58,7 +59,8 @@ class SchedulingIT extends DatabaseIntegrationTest {
             LookupPurgeSchedule.class,
             TransferIdempotencyPurgeSchedule.class,
             TransferExpirySchedule.class,
-            TransferReviewReminderSchedule.class)) {
+            TransferReviewReminderSchedule.class,
+            ReconciliationSchedule.class)) {
       assertThat(context.getBeanNamesForType(schedule)).as(schedule.getSimpleName()).isEmpty();
     }
     assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values())

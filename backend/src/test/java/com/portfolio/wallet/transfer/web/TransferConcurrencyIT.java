@@ -2,6 +2,8 @@ package com.portfolio.wallet.transfer.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.wallet.admin.application.ReconciliationReport;
+import com.portfolio.wallet.admin.application.ReconciliationService;
 import com.portfolio.wallet.support.OutboxRows;
 import com.portfolio.wallet.transfer.application.TransferExpiryService;
 import java.math.BigDecimal;
@@ -10,9 +12,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -40,7 +44,11 @@ import org.springframework.mock.web.MockHttpServletResponse;
  *       usage equal to the sum of that sender's open holds on that day, each day's used equal to
  *       its completed transfers, money conserved, Σ DEBIT = Σ CREDIT, available + reserved = ledger
  *       balance (MVP-ADR-03 check 1), and exactly one review row, audit row and email per decided
- *       hold: every hold released or captured exactly once (Q4).
+ *       hold: every hold released or captured exactly once (Q4);
+ *   <li>the same mix with staff approvals and rejections by two compliance officers (PR 5b step 13;
+ *       criteria 11, 14a, 15, 18) settles every hold by approval, rejection or expiry, keeps the
+ *       same invariants with each approval captured and each rejection released once, and a
+ *       reconciliation run then reports nothing for any of the test's own rows.
  * </ul>
  *
  * Every assertion is an invariant or an outcome that does not depend on the interleaving, so the
@@ -55,6 +63,7 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
   private static final ZoneId BANGKOK = ZoneId.of("Asia/Bangkok");
 
   @Autowired TransferExpiryService expiry;
+  @Autowired ReconciliationService reconciliation;
 
   private ExecutorService pool;
 
@@ -291,7 +300,7 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
         assertThat(transferRow(id)).containsEntry("status", "EXPIRED");
       }
     }
-    assertHoldInvariants(accounts);
+    assertHoldInvariants(accounts, false, "10000.00");
 
     // Settle: every hold still open becomes overdue and is expired.
     for (Account account : accounts) {
@@ -303,16 +312,199 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
       expiry.expireDue();
     }
     assertThat(openHolds(accounts)).isZero();
-    assertHoldInvariants(accounts);
+    assertHoldInvariants(accounts, false, "10000.00");
     for (Account account : accounts) {
       assertThat(reserved(account)).isEqualByComparingTo("0");
       assertThat(transferReserved(account)).isEqualByComparingTo("0");
     }
   }
 
+  // Criteria 11, 14a, 15, 18: the mix with staff decisions (PR 5b) ----------------------------
+
+  private enum StaffMixOp {
+    COMPLETE,
+    HOLD,
+    CANCEL,
+    EXPIRE,
+    APPROVE,
+    REJECT
+  }
+
+  private static final String STAFF_MIX_FUNDS = "20000.00";
+
+  /**
+   * The random mix of the test above with staff approvals and rejections by two compliance
+   * officers: 60 operations at once on four accounts, against 12 holds made before the race (the
+   * first of each account's three already overdue, so a decision on it expires it and the job
+   * competes for it). Then every hold still open is approved, rejected or expired in turn. After
+   * the race and after the settlement each hold is captured (approved) or released (rejected,
+   * cancelled, expired) exactly once, with one review row, one audit row and one email of its
+   * outcome; money is conserved, Σ DEBIT = Σ CREDIT and every wallet equals its ledger balance.
+   * Finally a reconciliation run reports nothing for any of the test's own wallets, accounts,
+   * postings, movements, transfers or review rows.
+   *
+   * <p>Deterministic outcomes although the scheduling is not: the plan is checked before the race
+   * so that no sender can run out of money or daily limit (every create is accepted), and that for
+   * each of approve, reject and cancel some hold that is not overdue is targeted by that decision
+   * alone, so it wins whatever the order; a decision on an overdue hold always ends {@code 409}.
+   */
+  @Test
+  void aRandomMixWithStaffApprovalsAndRejectionsCapturesOrReleasesEveryHoldExactlyOnce()
+      throws Exception {
+    Random random = new Random(20261124L);
+    List<Account> accounts = new ArrayList<>();
+    for (int i = 0; i < 4; i++) {
+      accounts.add(funded(STAFF_MIX_FUNDS));
+    }
+    List<Account> reviewers = List.of(officer(), officer());
+    List<UUID> holds = new ArrayList<>();
+    Set<UUID> overdueBefore = new HashSet<>();
+    Map<UUID, Account> senderOf = new HashMap<>();
+    for (int i = 0; i < accounts.size(); i++) {
+      Account sender = accounts.get(i);
+      Account recipient = accounts.get((i + 1) % accounts.size());
+      for (int h = 0; h < 3; h++) {
+        UUID id = held(sender, recipient);
+        holds.add(id);
+        senderOf.put(id, sender);
+        if (h == 0) {
+          overdue(id, 60);
+          overdueBefore.add(id);
+        }
+      }
+    }
+
+    List<Callable<String>> tasks = new ArrayList<>();
+    Map<UUID, List<StaffMixOp>> decisionsOn = new HashMap<>();
+    Map<Account, BigDecimal> plannedOut = new HashMap<>();
+    for (int i = 0; i < 60; i++) {
+      StaffMixOp op = StaffMixOp.values()[random.nextInt(StaffMixOp.values().length)];
+      Account from = accounts.get(random.nextInt(accounts.size()));
+      Account to = accounts.get((accounts.indexOf(from) + 1 + random.nextInt(3)) % 4);
+      UUID target = holds.get(random.nextInt(holds.size()));
+      Account reviewer = reviewers.get(random.nextInt(reviewers.size()));
+      switch (op) {
+        case COMPLETE -> plannedOut.merge(from, new BigDecimal(ALLOW), BigDecimal::add);
+        case HOLD -> plannedOut.merge(from, new BigDecimal(HOLD_ANY_RECIPIENT), BigDecimal::add);
+        case CANCEL, APPROVE, REJECT ->
+            decisionsOn.computeIfAbsent(target, t -> new ArrayList<>()).add(op);
+        case EXPIRE -> {}
+      }
+      tasks.add(
+          switch (op) {
+            case COMPLETE -> () -> outcome(transfer(from, to, ALLOW));
+            case HOLD -> () -> outcome(transfer(from, to, HOLD_ANY_RECIPIENT));
+            case CANCEL -> () -> outcome(cancel(target, senderOf.get(target)));
+            case APPROVE -> () -> outcome(approveReview(target, reviewer));
+            case REJECT -> () -> outcome(rejectReview(target, "Unusual pattern", reviewer));
+            case EXPIRE ->
+                () -> {
+                  expiry.expireDue();
+                  return "EXPIRE";
+                };
+          });
+    }
+    // The plan, checked before the race: what makes the outcome categories independent of order.
+    // Incoming completions and releases only add to a sender's available balance, so the start is
+    // the lowest it can be; the daily usage stays far below the BASIC limit.
+    BigDecimal availableAtStart =
+        new BigDecimal(STAFF_MIX_FUNDS)
+            .subtract(new BigDecimal(HOLD).multiply(BigDecimal.valueOf(3)));
+    plannedOut.forEach(
+        (sender, out) -> {
+          assertThat(out).as("no sender can run out of money").isLessThan(availableAtStart);
+          assertThat(out.add(new BigDecimal(HOLD).multiply(BigDecimal.valueOf(3))))
+              .as("no sender can reach the daily limit")
+              .isLessThan(BASIC_DAILY);
+        });
+    for (StaffMixOp only : List.of(StaffMixOp.APPROVE, StaffMixOp.REJECT, StaffMixOp.CANCEL)) {
+      assertThat(decisionsOn.entrySet())
+          .as("the seed has a hold, not overdue, decided only by " + only)
+          .anySatisfy(
+              e -> {
+                assertThat(overdueBefore).doesNotContain(e.getKey());
+                assertThat(e.getValue()).containsOnly(only).hasSize(1);
+              });
+    }
+    assertThat(decisionsOn.keySet())
+        .as("the seed decides an overdue hold")
+        .containsAnyElementsOf(overdueBefore);
+    assertThat(plannedOut).as("the seed creates transfers").isNotEmpty();
+
+    List<String> outcomes = race(tasks);
+
+    assertThat(outcomes)
+        .as("no request failed with a timeout, a deadlock or any unexpected code")
+        .allSatisfy(
+            o ->
+                assertThat(o)
+                    .isIn(
+                        "201:COMPLETED",
+                        "201:PENDING_REVIEW",
+                        "200:CANCELLED",
+                        "200:COMPLETED",
+                        "200:REJECTED",
+                        "409:INVALID_TRANSFER_STATE",
+                        "EXPIRE"));
+    assertThat(outcomes)
+        .contains(
+            "201:COMPLETED",
+            "201:PENDING_REVIEW",
+            "200:CANCELLED",
+            "200:COMPLETED",
+            "200:REJECTED",
+            "409:INVALID_TRANSFER_STATE",
+            "EXPIRE");
+    for (UUID id : overdueBefore) {
+      // Overdue before the race: a decision or a run expired it, whichever came first (D2 5–7).
+      assertThat(transferRow(id)).containsEntry("status", "EXPIRED");
+    }
+    assertHoldInvariants(accounts, true, STAFF_MIX_FUNDS);
+
+    // Settle: every hold still open is approved, rejected or expired, in turn.
+    List<UUID> open = new ArrayList<>();
+    for (Account account : accounts) {
+      open.addAll(idsWithStatus(account, "PENDING_REVIEW"));
+    }
+    for (int i = 0; i < open.size(); i++) {
+      UUID id = open.get(i);
+      Account reviewer = reviewers.get(i % reviewers.size());
+      switch (i % 3) {
+        case 0 -> assertThat(approveReview(id, reviewer).getStatus()).isEqualTo(200);
+        case 1 ->
+            assertThat(rejectReview(id, "Unusual pattern", reviewer).getStatus()).isEqualTo(200);
+        default -> overdue(id, 60);
+      }
+    }
+    for (int run = 0; run < 5 && openHolds(accounts) > 0; run++) {
+      expiry.expireDue();
+    }
+    assertThat(openHolds(accounts)).isZero();
+    assertHoldInvariants(accounts, true, STAFF_MIX_FUNDS);
+    for (Account account : accounts) {
+      assertThat(reserved(account)).isEqualByComparingTo("0");
+      assertThat(transferReserved(account)).isEqualByComparingTo("0");
+    }
+
+    // Reconciliation over the shared database: nothing for any of this test's own rows.
+    ReconciliationReport report = reconciliation.reconcile();
+    assertThat(report.completed()).isTrue();
+    Set<Object> own = ownIds(accounts);
+    assertThat(own).containsAll(holds);
+    assertThat(report.mismatches())
+        .as("no mismatch for the test's own rows")
+        .noneMatch(m -> own.stream().anyMatch(m::involves));
+  }
+
   // Invariants ---------------------------------------------------------------------------------
 
-  private void assertHoldInvariants(List<Account> accounts) {
+  /**
+   * The invariants of the class description over the accounts' own rows. {@code staffDecisions}
+   * admits the outcomes only a compliance officer can cause (an approved hold, a rejection);
+   * without it they fail the test, as any unexpected status does. {@code funds} is each account's
+   * funding.
+   */
+  private void assertHoldInvariants(List<Account> accounts, boolean staffDecisions, String funds) {
     BigDecimal total = BigDecimal.ZERO;
     for (Account account : accounts) {
       List<Map<String, Object>> sent = sentTransfers(account);
@@ -322,6 +514,7 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
       int held = 0;
       int cancelled = 0;
       int expired = 0;
+      int rejected = 0;
       for (Map<String, Object> row : sent) {
         String status = (String) row.get("status");
         BigDecimal amount = (BigDecimal) row.get("amount");
@@ -336,7 +529,22 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
             usage[0] = usage[0].add(amount);
             assertThat(ledgerTransactions(reference)).as("one posting").isOne();
             assertBalancedPosting(reference, amount.toPlainString());
-            assertThat(reviewRows(id)).isEmpty();
+            if (row.get("held_at") == null) {
+              assertThat(reviewRows(id)).isEmpty();
+            } else {
+              // A held transfer completes only by a staff approval (D2 case 1): captured once.
+              assertThat(staffDecisions).as("an approved hold " + id).isTrue();
+              held++;
+              assertThat(reviewRows(id))
+                  .as("one review row for an approval")
+                  .singleElement()
+                  .satisfies(
+                      r ->
+                          assertThat(r)
+                              .containsEntry("action", "APPROVE")
+                              .containsEntry("decided_by", "STAFF"));
+              assertThat(reviewAudits(id)).as("one audit row for an approval").isOne();
+            }
           }
           case "PENDING_REVIEW" -> {
             pendingOut = pendingOut.add(amount);
@@ -346,15 +554,27 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
             assertThat(reviewRows(id)).isEmpty();
             assertThat(reviewAudits(id)).isZero();
           }
-          case "CANCELLED", "EXPIRED" -> {
+          case "CANCELLED", "EXPIRED", "REJECTED" -> {
             held++;
+            String action;
             if (status.equals("CANCELLED")) {
               cancelled++;
-            } else {
+              action = "CANCEL";
+            } else if (status.equals("EXPIRED")) {
               expired++;
+              action = "EXPIRE";
+            } else {
+              assertThat(staffDecisions).as("a rejected hold " + id).isTrue();
+              rejected++;
+              action = "REJECT";
+              // No wallet is ever unavailable here: every rejection is the staff's (D2 case 2).
+              assertThat(row).containsEntry("rejection_reason_category", "REVIEW_DECLINED");
             }
             assertThat(ledgerTransactions(reference)).isZero();
-            assertThat(reviewRows(id)).as("one review row for " + status).hasSize(1);
+            assertThat(reviewRows(id))
+                .as("one review row for " + status)
+                .singleElement()
+                .satisfies(r -> assertThat(r).containsEntry("action", action));
             assertThat(reviewAudits(id)).as("one audit row for " + status).isOne();
           }
           default -> throw new AssertionError("unexpected status " + status);
@@ -368,10 +588,7 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
       assertThat(available(account))
           .as(who + " available")
           .isEqualByComparingTo(
-              new BigDecimal("10000.00")
-                  .subtract(completedOut)
-                  .subtract(pendingOut)
-                  .add(completedIn));
+              new BigDecimal(funds).subtract(completedOut).subtract(pendingOut).add(completedIn));
       assertTotalMatchesLedger(account);
       // Each day's usage: used = its completions, reserved = its open holds; no other day used.
       List<Map<String, Object>> days =
@@ -397,6 +614,7 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
           .isEqualTo(held);
       assertThat(Collections.frequency(kinds, "TRANSFER_CANCELLED")).isEqualTo(cancelled);
       assertThat(Collections.frequency(kinds, "TRANSFER_EXPIRED")).isEqualTo(expired);
+      assertThat(Collections.frequency(kinds, "TRANSFER_REJECTED")).isEqualTo(rejected);
       assertThat(Collections.frequency(kinds, "TRANSFER_SENT"))
           .isEqualTo(idsWithStatus(account, "COMPLETED").size());
       assertThat(Collections.frequency(kinds, "TRANSFER_RECEIVED"))
@@ -410,8 +628,7 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
     }
     assertThat(total)
         .as("money conserved")
-        .isEqualByComparingTo(
-            new BigDecimal("10000.00").multiply(BigDecimal.valueOf(accounts.size())));
+        .isEqualByComparingTo(new BigDecimal(funds).multiply(BigDecimal.valueOf(accounts.size())));
     assertOwnPostingsBalanced(accounts);
   }
 
@@ -495,7 +712,8 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
 
   private List<Map<String, Object>> sentTransfers(Account sender) {
     return jdbc.queryForList(
-        "SELECT id, reference, status, amount, limit_date FROM transfer.transfers"
+        "SELECT id, reference, status, amount, limit_date, held_at, rejection_reason_category"
+            + " FROM transfer.transfers"
             + " WHERE sender_customer_id = ?",
         sender.id());
   }
@@ -534,6 +752,50 @@ class TransferConcurrencyIT extends TransferReviewFlowSupport {
             + " WHERE receiver_customer_id = ? AND status = 'COMPLETED'",
         BigDecimal.class,
         receiver.id());
+  }
+
+  /**
+   * Every id of the customers' wallets, ledger accounts, postings, deposits, withdrawals, transfers
+   * and review rows, as a reconciliation mismatch would name them.
+   */
+  private Set<Object> ownIds(List<Account> customers) {
+    Set<Object> ids = new HashSet<>();
+    for (Account customer : customers) {
+      UUID wallet = walletId(customer);
+      ids.add(wallet);
+      ids.addAll(
+          jdbc.queryForList(
+              "SELECT id FROM ledger.ledger_accounts WHERE owner_reference = ?",
+              UUID.class,
+              wallet));
+      ids.addAll(
+          jdbc.queryForList(
+              "SELECT DISTINCT e.transaction_id FROM ledger.ledger_entries e"
+                  + " JOIN ledger.ledger_accounts a ON a.id = e.account_id"
+                  + " WHERE a.owner_reference = ?",
+              UUID.class,
+              wallet));
+      ids.addAll(
+          jdbc.queryForList(
+              "SELECT id FROM wallet.deposits WHERE wallet_id = ?"
+                  + " UNION ALL SELECT id FROM wallet.withdrawals WHERE wallet_id = ?",
+              UUID.class,
+              wallet,
+              wallet));
+      ids.addAll(
+          jdbc.queryForList(
+              "SELECT id FROM transfer.transfers WHERE sender_wallet_id = ? OR receiver_wallet_id = ?",
+              UUID.class,
+              wallet,
+              wallet));
+      ids.addAll(
+          jdbc.queryForList(
+              "SELECT r.id FROM risk.risk_reviews r JOIN transfer.transfers t ON t.id = r.transfer_id"
+                  + " WHERE t.sender_wallet_id = ?",
+              UUID.class,
+              wallet));
+    }
+    return ids;
   }
 
   private int reviewAudits(UUID transferId) {

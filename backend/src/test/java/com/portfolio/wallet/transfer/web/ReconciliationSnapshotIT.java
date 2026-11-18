@@ -6,7 +6,6 @@ import static org.mockito.Mockito.doAnswer;
 import com.portfolio.wallet.admin.application.ReconciliationReport;
 import com.portfolio.wallet.admin.application.ReconciliationService;
 import com.portfolio.wallet.common.database.DatabaseTimeoutProperties;
-import com.portfolio.wallet.wallet.application.WalletReconciliationReads;
 import com.portfolio.wallet.wallet.application.WalletReconciliationReads.WalletBalances;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -18,7 +17,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -41,7 +39,6 @@ class ReconciliationSnapshotIT extends TransferFlowSupport {
   @Autowired ReconciliationService reconciliation;
   @Autowired PlatformTransactionManager transactionManager;
   @Autowired DatabaseTimeoutProperties databaseTimeouts;
-  @MockitoSpyBean WalletReconciliationReads walletReadsSpy;
 
   @Test
   void aDepositCommittingDuringARunIsNotAFalseMismatch() throws Exception {

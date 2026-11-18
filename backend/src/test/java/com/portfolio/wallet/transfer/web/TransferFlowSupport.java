@@ -18,6 +18,7 @@ import com.portfolio.wallet.support.DatabaseIntegrationTest;
 import com.portfolio.wallet.support.OutboxRows;
 import com.portfolio.wallet.transfer.persistence.TransferRepository;
 import com.portfolio.wallet.wallet.application.WalletNumberGenerator;
+import com.portfolio.wallet.wallet.application.WalletReconciliationReads;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -84,6 +85,12 @@ abstract class TransferFlowSupport extends DatabaseIntegrationTest {
   @MockitoSpyBean AuditLogRepository auditRowsSpy;
   @MockitoSpyBean RiskAssessmentRepository riskRowsSpy;
   @MockitoSpyBean NotificationRepository notificationRowsSpy;
+
+  /**
+   * Spied here rather than in {@code ReconciliationSnapshotIT}, so that test shares this context
+   * instead of starting one of its own. A spy calls the real reads, and is reset after every test.
+   */
+  @MockitoSpyBean WalletReconciliationReads walletReadsSpy;
 
   record Account(UUID id, String token) {}
 

@@ -48,13 +48,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * A late action (case 6) commits the expiry and then answers {@code 409}; so, as the cancel, it
  * always opens a transaction of its own and refuses to run inside a caller's (an explicit guard).
  *
- * <p><b>Module design (MVP-ADR-24 "Dependencies").</b> The ADR has {@code admin} run the review in
- * one transaction, calling {@code transfer} for the row lock and then {@code risk} for the review
- * row. PR 5a placed the review-row recording inside the transfer module's shared sequence, which
- * the cancel and the expiry job use; the staff review uses the same sequence, so the transaction is
- * opened here and {@code admin} calls this service. The intent is kept: one transaction, the
- * transfer row locked first, the review row recorded by {@code risk} inside it, and {@code risk}
- * never calls {@code transfer}.
+ * <p><b>Module design</b> (documentations/06 MVP-ADR-24 "Dependencies", as amended by the owner on
+ * 2026-11-13, PR 5b step 9): {@code transfer} opens the one review transaction here, through the
+ * same decision sequence as the cancel and the expiry, and {@code admin} calls this service, then
+ * composes the staff detail after the commit. Inside the transaction the transfer row is locked
+ * first and {@code risk} records the review row; {@code risk} never calls {@code transfer}.
  *
  * <p>No {@code Idempotency-Key}: a review action is a state transition of an existing transfer, not
  * a new money movement (doc 02 §1.3), and counts only toward the general rate limit (Q15). A

@@ -49,6 +49,14 @@ import org.springframework.transaction.IllegalTransactionStateException;
  * write, and the bootstrap superuser with triggers disabled only for states the runtime role cannot
  * create (a decided transfer changed afterwards, an unbalanced ledger transaction). Rows stay:
  * nothing can delete them, and later runs keep reporting them under their own ids.
+ *
+ * <p><b>Unit-only kinds:</b> {@code DUPLICATE_REVIEW} and {@code DUPLICATE_CUSTOMER_ACCOUNT} are
+ * tested in {@code ReconcilerTest} only. PostgreSQL refuses both states: a second review row for a
+ * transfer violates {@code uq_risk_reviews_transfer} (V5, {@code UNIQUE (transfer_id)}), and a
+ * second customer account for a wallet violates {@code uq_ledger_accounts_customer_owner} (V2, a
+ * unique index on {@code owner_reference} {@code WHERE account_type = 'CUSTOMER'}). Unique indexes
+ * are not triggers, so even the superuser bypass ({@code session_replication_role = replica})
+ * cannot insert them; the checks guard against a future migration that drops either index.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class ReconciliationIT extends TransferReviewFlowSupport {

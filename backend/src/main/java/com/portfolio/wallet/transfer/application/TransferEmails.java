@@ -22,8 +22,8 @@ import org.springframework.stereotype.Component;
  *   <li>{@code REJECTED} (a staff rejection, or an approval that found a wallet frozen or closed):
  *       {@code TRANSFER_REJECTED} to the sender only; never the reviewer's reason or the category;
  *   <li>{@code CANCELLED}: {@code TRANSFER_CANCELLED} to the sender;
- *   <li>{@code EXPIRED} (the job, or a cancel after the deadline): {@code TRANSFER_EXPIRED} to the
- *       sender.
+ *   <li>{@code EXPIRED} (the job, or a cancel, staff approve or staff reject after the deadline):
+ *       {@code TRANSFER_EXPIRED} to the sender.
  * </ul>
  *
  * Never for {@code BLOCKED} (no way to learn the risk rules), a stored refusal, a replay or a

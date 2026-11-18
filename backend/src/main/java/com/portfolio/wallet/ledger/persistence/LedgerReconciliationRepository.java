@@ -51,7 +51,9 @@ public class LedgerReconciliationRepository {
 
   /**
    * Every account with its Σ DEBIT and Σ CREDIT (zero for an account without entries). Entries are
-   * aggregated before the join, in one pass over {@code ledger_entries}.
+   * aggregated before the join, in one pass over {@code ledger_entries}. Ordered by account id, so
+   * if a wallet ever had two customer accounts, the "first" one the reconciliation compares (and
+   * reports the other against) is the same on every run; the sort is of one row per account.
    */
   public List<AccountTotalsRow> accountTotals() {
     return jdbc.sql(
@@ -66,6 +68,7 @@ public class LedgerReconciliationRepository {
                    coalesce(t.debits, 0) AS debits, coalesce(t.credits, 0) AS credits
             FROM ledger.ledger_accounts a
             LEFT JOIN totals t ON t.account_id = a.id
+            ORDER BY a.id
             """)
         .query(
             (rs, row) ->
