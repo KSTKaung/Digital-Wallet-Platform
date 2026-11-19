@@ -58,7 +58,7 @@ function Layout() {
  * being restored neither set is shown, so the navigation does not flicker between them.
  */
 function MainNav() {
-  const { status, logout } = useAuth();
+  const { status, logout, hasRole } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const inFlight = useRef(false);
 
@@ -85,6 +85,20 @@ function MainNav() {
         </li>
         {status === 'signedIn' && (
           <>
+            {hasRole('CUSTOMER') && (
+              <>
+                <li>
+                  <NavLink to="/profile" className={navClass}>
+                    Profile
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/kyc" className={navClass}>
+                    KYC
+                  </NavLink>
+                </li>
+              </>
+            )}
             <li>
               <NavLink to="/settings/password" className={navClass}>
                 Change password

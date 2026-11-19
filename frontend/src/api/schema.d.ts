@@ -907,6 +907,8 @@ export interface components {
         };
         KycStatusResponse: {
             status?: string;
+            /** Format: uuid */
+            applicationId?: string;
             verificationLevel?: string;
             walletCreated?: boolean;
         };

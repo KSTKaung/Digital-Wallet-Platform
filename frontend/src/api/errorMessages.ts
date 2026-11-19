@@ -43,6 +43,9 @@ const MESSAGES: Readonly<Record<string, string>> = {
   WALLET_FROZEN: 'Wallet frozen. Contact support.',
   SERVICE_DEGRADED: 'Service busy, try again.',
   SYSTEM_ERROR: 'Something went wrong on our side. Please try again.',
+  // KYC (doc 02 §2.2, MVP-ADR-10; no doc 05 §5.3 entry). Screens override with their context.
+  KYC_ALREADY_ACTIVE: 'You already have an active KYC application.',
+  INVALID_KYC_STATE: 'This is not possible while your KYC application is in its current state.',
 };
 
 /** Codes whose text gets "Please wait N seconds" when the server sent Retry-After. */
@@ -61,6 +64,13 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   newPassword: 'New password',
   currentPassword: 'Current password',
   otp: 'Code',
+  dateOfBirth: 'Date of birth',
+  countryCode: 'Country',
+  verificationLevel: 'Verification level',
+  documentType: 'Document type',
+  documentReference: 'Document reference',
+  firstName: 'First name',
+  lastName: 'Last name',
 };
 
 export function describeError(error: unknown, overrides: ErrorOverrides = {}): DescribedError {
@@ -70,6 +80,29 @@ export function describeError(error: unknown, overrides: ErrorOverrides = {}): D
   const base = overrides[error.errorCode] ?? baseMessage(error);
   const message = needsWait(error) ? `${base} ${waitText(error.retryAfterSeconds)}` : base;
   return error.correlationId ? { message, correlationId: error.correlationId } : { message };
+}
+
+/**
+ * `404 WALLET_NOT_FOUND` (GET /wallet) or `403 KYC_REQUIRED` (money endpoints): the customer has
+ * no wallet yet and should complete KYC (doc 02 §7 rule 4; doc 06 MVP-ADR-10).
+ */
+export function isKycRequired(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    ((error.status === 404 && error.errorCode === 'WALLET_NOT_FOUND') ||
+      (error.status === 403 && error.errorCode === 'KYC_REQUIRED'))
+  );
+}
+
+/**
+ * The request field a VALIDATION_ERROR names ("dateOfBirth: must not be in the future" →
+ * "dateOfBirth"), so a form can mark that field; undefined for any other error.
+ */
+export function validationErrorField(error: unknown): string | undefined {
+  if (!(error instanceof ApiError) || error.errorCode !== 'VALIDATION_ERROR') {
+    return undefined;
+  }
+  return /^([A-Za-z]+): /.exec(error.message.trim())?.[1];
 }
 
 /** "Please wait 30 seconds and try again." or a plain "try again later". */

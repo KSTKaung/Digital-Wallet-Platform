@@ -41,6 +41,31 @@ describe('main navigation by session status', () => {
     );
   });
 
+  it('shows Profile and KYC to a signed-in customer', async () => {
+    setSession(CUSTOMER, 900);
+    stubFetch({
+      'GET /actuator/health': health,
+      'GET /api/v1/wallet': () => errorResponse(404, 'WALLET_NOT_FOUND'),
+    });
+    renderRoute('/');
+
+    expect(nav().getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile');
+    expect(nav().getByRole('link', { name: 'KYC' })).toHaveAttribute('href', '/kyc');
+    expect(await screen.findByText('Complete KYC to continue.')).toBeInTheDocument();
+  });
+
+  it.each([['ADMIN'], ['COMPLIANCE_OFFICER']])('hides the customer links from %s', async (role) => {
+    setSession(makeJwt({ sub: 'staff-1', roles: [role], sid: 's9' }), 900);
+    stubFetch({ 'GET /actuator/health': health });
+    renderRoute('/');
+
+    expect(nav().getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    expect(nav().getByRole('link', { name: 'Change password' })).toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'KYC' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Gateway is up')).toBeInTheDocument();
+  });
+
   it('offers Sign in and Register when signed out', async () => {
     stubFetch({
       'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
@@ -52,6 +77,8 @@ describe('main navigation by session status', () => {
     expect(nav().getByRole('link', { name: 'Register' })).toHaveAttribute('href', '/register');
     expect(nav().queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Change password' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'KYC' })).not.toBeInTheDocument();
   });
 
   it('signs out once on a double click and returns to the signed-out navigation', async () => {

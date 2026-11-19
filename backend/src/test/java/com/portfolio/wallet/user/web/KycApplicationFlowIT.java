@@ -271,17 +271,89 @@ class KycApplicationFlowIT extends UserFlowSupport {
 
     JsonNode none = body(getAs(STATUS, account.token()));
     assertThat(none.get("status").asString()).isEqualTo("NONE");
+    assertThat(none.has("applicationId")).isTrue();
+    assertThat(none.get("applicationId").isNull()).isTrue();
     assertThat(none.get("verificationLevel").isNull()).isTrue();
     assertThat(none.get("walletCreated").asBoolean()).isFalse();
 
     completeProfile(account);
     UUID id = draft(account);
-    assertThat(body(getAs(STATUS, account.token())).get("status").asString()).isEqualTo("DRAFT");
+    JsonNode draft = body(getAs(STATUS, account.token()));
+    assertThat(draft.get("status").asString()).isEqualTo("DRAFT");
+    assertThat(draft.get("applicationId").asString()).isEqualTo(id.toString());
     submit(id, account.token());
     JsonNode pending = body(getAs(STATUS, account.token()));
     assertThat(pending.get("status").asString()).isEqualTo("PENDING_REVIEW");
+    assertThat(pending.get("applicationId").asString()).isEqualTo(id.toString());
     assertThat(pending.get("verificationLevel").asString()).isEqualTo("BASIC");
     assertThat(pending.get("walletCreated").asBoolean()).isFalse();
+  }
+
+  /** Owner, 2026-11-19: the field order is status, applicationId, verificationLevel, wallet. */
+  @Test
+  void statusHasTheDocumentedShape() throws Exception {
+    Account account = customer();
+
+    assertThat(getAs(STATUS, account.token()).getContentAsString())
+        .isEqualTo(
+            "{\"status\":\"NONE\",\"applicationId\":null,\"verificationLevel\":null,"
+                + "\"walletCreated\":false}");
+    UUID id = draft(account);
+    assertThat(getAs(STATUS, account.token()).getContentAsString())
+        .isEqualTo(
+            "{\"status\":\"DRAFT\",\"applicationId\":\""
+                + id
+                + "\",\"verificationLevel\":\"BASIC\",\"walletCreated\":false}");
+  }
+
+  /**
+   * The rejected application is reported (so its reason can be read) until a new one exists; with
+   * only rejected ones it is the latest. Another customer's application is never reported.
+   */
+  @Test
+  void statusReportsTheLatestRejectedApplicationUntilANewOneExists() throws Exception {
+    Account account = customer();
+    completeProfile(account);
+    Account other = customer();
+    completeProfile(other);
+    UUID theirs = draft(other);
+
+    UUID first = draft(account);
+    submit(first, account.token());
+    rejectDirectly(first);
+    JsonNode afterFirst = body(getAs(STATUS, account.token()));
+    assertThat(afterFirst.get("status").asString()).isEqualTo("REJECTED");
+    assertThat(afterFirst.get("applicationId").asString()).isEqualTo(first.toString());
+
+    UUID second = draft(account);
+    submit(second, account.token());
+    rejectDirectly(second);
+    JsonNode afterSecond = body(getAs(STATUS, account.token()));
+    assertThat(afterSecond.get("status").asString()).isEqualTo("REJECTED");
+    assertThat(afterSecond.get("applicationId").asString()).isEqualTo(second.toString());
+
+    UUID third = draft(account);
+    JsonNode afterThird = body(getAs(STATUS, account.token()));
+    assertThat(afterThird.get("status").asString()).isEqualTo("DRAFT");
+    assertThat(afterThird.get("applicationId").asString()).isEqualTo(third.toString());
+
+    // Each customer only ever sees their own application.
+    assertThat(body(getAs(STATUS, other.token())).get("applicationId").asString())
+        .isEqualTo(theirs.toString());
+    JsonNode stranger = body(getAs(STATUS, customer().token()));
+    assertThat(stranger.get("status").asString()).isEqualTo("NONE");
+    assertThat(stranger.get("applicationId").isNull()).isTrue();
+    assertThat(getAs(STATUS, account.token()).getContentAsString())
+        .doesNotContain(theirs.toString());
+  }
+
+  // Staff decisions belong to the admin module; here the rejection is written directly, as above.
+  private void rejectDirectly(UUID application) {
+    jdbc.update(
+        "UPDATE usr.kyc_applications SET status = 'REJECTED', reviewer_id = ?,"
+            + " rejection_reason = 'The document photo is unreadable' WHERE id = ?",
+        UUID.randomUUID(),
+        application);
   }
 
   // Ownership: identical 404 (MVP-ADR-19) -------------------------------------------------------

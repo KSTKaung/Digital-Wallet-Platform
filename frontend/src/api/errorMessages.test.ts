@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   describeError,
   GENERIC_ERROR_MESSAGE,
+  isKycRequired,
+  validationErrorField,
   LOGIN_FAILED_MESSAGE,
   NETWORK_ERROR_MESSAGE,
   waitText,
@@ -107,5 +109,45 @@ describe('waitText', () => {
   it('rounds fractions up and never says zero', () => {
     expect(waitText(0)).toBe('Please wait 1 second and try again.');
     expect(waitText(2.1)).toBe('Please wait 3 seconds and try again.');
+  });
+});
+
+describe('KYC helpers', () => {
+  it('isKycRequired recognises 404 WALLET_NOT_FOUND and 403 KYC_REQUIRED only', () => {
+    expect(isKycRequired(err(404, 'WALLET_NOT_FOUND'))).toBe(true);
+    expect(isKycRequired(err(403, 'KYC_REQUIRED'))).toBe(true);
+    expect(isKycRequired(err(404, 'NOT_FOUND'))).toBe(false);
+    expect(isKycRequired(err(403, 'FORBIDDEN'))).toBe(false);
+    expect(isKycRequired(err(409, 'WALLET_NOT_FOUND'))).toBe(false);
+    expect(isKycRequired(new Error('network'))).toBe(false);
+  });
+
+  it('validationErrorField names the field of a VALIDATION_ERROR only', () => {
+    const missing = err(400, 'VALIDATION_ERROR', 'dateOfBirth: must not be null');
+    expect(validationErrorField(missing)).toBe('dateOfBirth');
+    const malformed = err(400, 'VALIDATION_ERROR', 'Malformed request body');
+    expect(validationErrorField(malformed)).toBeUndefined();
+    expect(validationErrorField(err(409, 'INVALID_KYC_STATE', 'dateOfBirth: x'))).toBeUndefined();
+    expect(validationErrorField('dateOfBirth: x')).toBeUndefined();
+  });
+
+  it('labels the profile and KYC fields in validation messages', () => {
+    const profile = err(
+      400,
+      'VALIDATION_ERROR',
+      'dateOfBirth: must be set in the profile before submitting',
+    );
+    expect(describeError(profile).message).toBe(
+      'Date of birth must be set in the profile before submitting.',
+    );
+    const size = err(400, 'VALIDATION_ERROR', 'documentReference: size must be between 0 and 50');
+    expect(describeError(size).message).toBe('Document reference size must be between 0 and 50.');
+  });
+
+  it('has texts for KYC_ALREADY_ACTIVE and INVALID_KYC_STATE that never echo the server', () => {
+    expect(describeError(err(409, 'KYC_ALREADY_ACTIVE')).message).toBe(
+      'You already have an active KYC application.',
+    );
+    expect(describeError(err(409, 'INVALID_KYC_STATE')).message).toMatch(/current state/);
   });
 });

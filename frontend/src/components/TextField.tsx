@@ -5,7 +5,7 @@ export interface TextFieldProps {
   name: string;
   value: string;
   onChange: (value: string) => void;
-  type?: 'text' | 'email' | 'tel' | 'password';
+  type?: 'text' | 'email' | 'tel' | 'password' | 'date';
   autoComplete: string;
   /** Shown under the label and linked through aria-describedby. */
   hint?: ReactNode;
@@ -14,6 +14,8 @@ export interface TextFieldProps {
   required?: boolean;
   inputMode?: HTMLAttributes<HTMLInputElement>['inputMode'];
   maxLength?: number;
+  /** Upper bound for a date input ("YYYY-MM-DD"); a hint only, the server checks. */
+  max?: string;
   readOnly?: boolean;
   ref?: Ref<HTMLInputElement>;
   /** Rendered after the input (e.g. a show-password toggle). */
@@ -38,6 +40,7 @@ export function TextField({
   required = false,
   inputMode,
   maxLength,
+  max,
   readOnly,
   ref,
   trailing,
@@ -70,6 +73,7 @@ export function TextField({
           autoComplete={autoComplete}
           inputMode={inputMode}
           maxLength={maxLength}
+          max={max}
           readOnly={readOnly}
           required={required}
           aria-invalid={error ? true : undefined}
