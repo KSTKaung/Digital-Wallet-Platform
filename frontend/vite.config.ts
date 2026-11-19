@@ -24,6 +24,25 @@ export default defineConfig(({ mode }) => {
       globals: true,
       setupFiles: ['./src/test/setup.ts'],
       env: { VITE_API_BASE_URL: 'http://gateway.test' },
+      // CI runs `npm run coverage`; the API client and the session code must keep 80% line
+      // coverage (documentations/08 §4D.2, D4). A glob with no files yet adds no check.
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'html', 'lcov', 'json-summary'],
+        reportsDirectory: './coverage',
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/**/*.test.{ts,tsx}',
+          'src/test/**',
+          'src/main.tsx',
+          'src/api/schema.d.ts',
+          '**/*.d.ts',
+        ],
+        thresholds: {
+          'src/api/**': { lines: 80 },
+          'src/auth/**': { lines: 80 },
+        },
+      },
     },
   };
 });
