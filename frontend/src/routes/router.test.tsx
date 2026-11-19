@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { errorResponse, jsonResponse, stubFetch } from '../test/http';
 import { routes } from './router';
 
 function renderAt(path: string, table: RouteObject[] = routes) {
@@ -11,11 +12,14 @@ function renderAt(path: string, table: RouteObject[] = routes) {
 }
 
 describe('app routes', () => {
+  let http: ReturnType<typeof stubFetch>;
+
   beforeEach(() => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'UP' }), { status: 200 })),
-    );
+    // The layout restores the session once on load; no session here, so the refresh is refused.
+    http = stubFetch({
+      'GET /actuator/health': () => jsonResponse(200, { status: 'UP' }),
+      'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
+    });
   });
 
   it('renders the layout landmarks and the home page at /', async () => {
@@ -49,7 +53,8 @@ describe('app routes', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
-    expect(fetch).not.toHaveBeenCalled();
+    expect(http.callsTo('GET', '/actuator/health')).toHaveLength(0);
+    expect(http.callsTo('POST', '/api/v1/auth/refresh')).toHaveLength(1);
   });
 
   it('navigates from the not-found page back home', async () => {

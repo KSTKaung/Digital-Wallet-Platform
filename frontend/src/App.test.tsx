@@ -1,13 +1,14 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { errorResponse, jsonResponse, stubFetch } from './test/http';
 import { App } from './App';
 
 describe('App', () => {
   it('mounts the route table in a browser router', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'UP' }), { status: 200 })),
-    );
+    stubFetch({
+      'GET /actuator/health': () => jsonResponse(200, { status: 'UP' }),
+      'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
+    });
 
     render(<App />);
 

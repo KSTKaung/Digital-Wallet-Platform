@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router';
+import { AuthProvider } from '../auth/AuthProvider';
 
 const NAV_LINK_BASE =
   'rounded px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600';
@@ -10,8 +11,17 @@ const NAV_LINK_ACTIVE =
 /**
  * Shared page frame: skip link, header with the simulated-money note, main navigation and the
  * routed page in <main>. Later steps add navigation items here (documentations/08 §4D.3).
+ * The session provider wraps everything inside the router, so every page can use useAuth().
  */
 export function RootLayout() {
+  return (
+    <AuthProvider>
+      <Layout />
+    </AuthProvider>
+  );
+}
+
+function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <a
