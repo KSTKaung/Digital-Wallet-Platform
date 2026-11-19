@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeJwt } from '../test/http';
 import {
+  acknowledgeSessionEnd,
   clearSession,
   decodeJwtClaims,
   endSession,
+  getSessionEndReason,
   getAccessToken,
   getSessionSnapshot,
   hasFreshAccessToken,
@@ -111,5 +113,56 @@ describe('token store', () => {
     off();
     endSession();
     expect(ended).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('session end reason', () => {
+  it('endSession records and emits the reason, defaulting to sessionEnded', () => {
+    const ended = vi.fn();
+    onSessionEnded(ended);
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+
+    endSession();
+    expect(ended).toHaveBeenLastCalledWith('sessionEnded');
+    expect(getSessionEndReason()).toBe('sessionEnded');
+
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+    endSession('passwordChanged');
+    expect(ended).toHaveBeenLastCalledWith('passwordChanged');
+    expect(getSessionEndReason()).toBe('passwordChanged');
+  });
+
+  it('records the reason before change listeners run', () => {
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+    const seen: (string | null)[] = [];
+    subscribe(() => seen.push(getSessionEndReason()));
+
+    endSession('passwordChanged');
+
+    expect(seen).toEqual(['passwordChanged']);
+  });
+
+  it('clearSession records its reason without the ended event; no reason resets it', () => {
+    const ended = vi.fn();
+    onSessionEnded(ended);
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+
+    clearSession('loggedOut');
+    expect(getSessionEndReason()).toBe('loggedOut');
+    expect(ended).not.toHaveBeenCalled();
+
+    clearSession();
+    expect(getSessionEndReason()).toBeNull();
+  });
+
+  it('a new session and acknowledgeSessionEnd both forget the reason', () => {
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+    endSession('passwordChanged');
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+    expect(getSessionEndReason()).toBeNull();
+
+    endSession();
+    acknowledgeSessionEnd();
+    expect(getSessionEndReason()).toBeNull();
   });
 });

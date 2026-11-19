@@ -26,10 +26,24 @@ export interface SessionSnapshot {
 
 type Listener = () => void;
 
+/**
+ * Why the last session ended, so every part of the app that sends the user to /login (the
+ * AuthProvider listener and the RequireAuth guard) picks the same router state, whichever runs
+ * first. `sessionEnded`: the server ended it (second 401, refused refresh). `passwordChanged`:
+ * change-password ended every session. `loggedOut`: the user signed out.
+ */
+export type SessionEndReason = 'sessionEnded' | 'passwordChanged' | 'loggedOut';
+
+/** The reasons that emit the session-ended event (a chosen sign-out does not). */
+export type EndedReason = Exclude<SessionEndReason, 'loggedOut'>;
+
+type EndedListener = (reason: EndedReason) => void;
+
 let accessToken: string | null = null;
 let snapshot: SessionSnapshot | null = null;
+let endReason: SessionEndReason | null = null;
 const changeListeners = new Set<Listener>();
-const endedListeners = new Set<Listener>();
+const endedListeners = new Set<EndedListener>();
 
 function emit(listeners: Set<Listener>): void {
   for (const listener of [...listeners]) {
@@ -83,12 +97,18 @@ export function setSession(token: string, expiresInSeconds: number): SessionSnap
     Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1000 : 0;
   accessToken = token;
   snapshot = { user, expiresAt: Date.now() + lifetimeMs };
+  endReason = null;
   emit(changeListeners);
   return snapshot;
 }
 
-/** Forgets the token silently (logout, failed restore, password change). */
-export function clearSession(): void {
+/**
+ * Forgets the token without the session-ended event (failed restore, logout). The reason is
+ * recorded before listeners run, so a render triggered by this change already sees it; a call
+ * without a reason resets it.
+ */
+export function clearSession(reason: SessionEndReason | null = null): void {
+  endReason = reason;
   if (accessToken === null && snapshot === null) {
     return;
   }
@@ -98,12 +118,25 @@ export function clearSession(): void {
 }
 
 /**
- * The server ended a session this tab was using (second 401, failed refresh after a 401).
- * Clears the token and tells listeners, so the app can show "Your session has ended".
+ * A session this tab was using has ended: by the server (second 401, failed refresh after a
+ * 401) or by a password change. Clears the token, records the reason and tells listeners, so
+ * the app can go to /login with the matching notice.
  */
-export function endSession(): void {
-  clearSession();
-  emit(endedListeners);
+export function endSession(reason: EndedReason = 'sessionEnded'): void {
+  clearSession(reason);
+  for (const listener of [...endedListeners]) {
+    listener(reason);
+  }
+}
+
+/** The reason the last session ended, or null (never signed in, signed in again, or acknowledged). */
+export function getSessionEndReason(): SessionEndReason | null {
+  return endReason;
+}
+
+/** Forgets the end reason once its notice has been shown and the user moved on. */
+export function acknowledgeSessionEnd(): void {
+  endReason = null;
 }
 
 export function getAccessToken(): string | null {
@@ -127,8 +160,8 @@ export function subscribe(listener: Listener): () => void {
   };
 }
 
-/** Called when the server ended the session (see endSession). */
-export function onSessionEnded(listener: Listener): () => void {
+/** Called with the reason when a session ended (see endSession). */
+export function onSessionEnded(listener: EndedListener): () => void {
   endedListeners.add(listener);
   return () => {
     endedListeners.delete(listener);

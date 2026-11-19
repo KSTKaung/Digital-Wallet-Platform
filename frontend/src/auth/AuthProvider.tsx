@@ -2,15 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import * as authApi from '../api/auth';
-import { AuthContext, type AuthContextValue, type LoginLocationState } from './authContext';
+import { AuthContext, loginStateFor, type AuthContextValue } from './authContext';
 import { refreshAccessToken } from './refresh';
-import { getSessionSnapshot, onSessionEnded, subscribe, type Role } from './tokenStore';
+import {
+  acknowledgeSessionEnd,
+  getSessionSnapshot,
+  onSessionEnded,
+  subscribe,
+  type Role,
+} from './tokenStore';
 
 /**
  * Session state for the app (documentations/08 §4D D3). On mount it runs ONE silent refresh to
  * restore a session after a reload (guarded, so React StrictMode's double effect never sends a
- * second refresh, which would count as token reuse). When the API client reports that the server
- * ended the session, it navigates to /login with a notice in router state.
+ * second refresh, which would count as token reuse). When a session ends (the server ended it,
+ * or a password change ended every session) it navigates to /login with the matching notice in
+ * router state; RequireAuth computes the same state from the same reason (loginStateFor).
  * Must be rendered inside a router.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -23,6 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     pathnameRef.current = location.pathname;
+    // Once the user leaves /login, the end reason's notice has served its purpose.
+    if (location.pathname !== '/login') {
+      acknowledgeSessionEnd();
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -37,9 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(
     () =>
-      onSessionEnded(() => {
-        const state: LoginLocationState = { sessionEnded: true, from: pathnameRef.current };
-        navigate('/login', { replace: true, state });
+      onSessionEnded((reason) => {
+        navigate('/login', { replace: true, state: loginStateFor(reason, pathnameRef.current) });
       }),
     [navigate],
   );

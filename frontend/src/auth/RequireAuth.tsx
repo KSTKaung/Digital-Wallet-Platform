@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { useAuth, type LoginLocationState } from './authContext';
+import { loginStateFor, useAuth } from './authContext';
+import { getSessionEndReason } from './tokenStore';
 
 /** Shown while the session is being restored; renders nothing from the protected page. */
 export function SessionRestoring() {
@@ -14,6 +15,8 @@ export function SessionRestoring() {
 /**
  * UI guard only: the server authorises every request. While the session is restoring nothing
  * of the protected page is rendered; signed-out users go to /login and come back afterwards.
+ * When a session just ended, the /login state comes from the recorded end reason, the same as
+ * the AuthProvider's navigation, so the two can run in either order.
  */
 export function RequireAuth({ children }: { children?: ReactNode }) {
   const { status } = useAuth();
@@ -23,8 +26,13 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
     return <SessionRestoring />;
   }
   if (status === 'signedOut') {
-    const state: LoginLocationState = { from: location.pathname };
-    return <Navigate to="/login" replace state={state} />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={loginStateFor(getSessionEndReason(), location.pathname)}
+      />
+    );
   }
   return children ?? <Outlet />;
 }

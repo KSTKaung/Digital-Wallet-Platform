@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { AuthProvider } from '../auth/AuthProvider';
+import { useAuth } from '../auth/authContext';
 
 const NAV_LINK_BASE =
   'rounded px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600';
@@ -7,6 +9,9 @@ const NAV_LINK_IDLE =
   'text-slate-700 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white';
 const NAV_LINK_ACTIVE =
   'bg-slate-200 text-slate-900 underline underline-offset-4 dark:bg-slate-800 dark:text-white';
+
+const navClass = ({ isActive }: { isActive: boolean }) =>
+  `${NAV_LINK_BASE} ${isActive ? NAV_LINK_ACTIVE : NAV_LINK_IDLE}`;
 
 /**
  * Shared page frame: skip link, header with the simulated-money note, main navigation and the
@@ -38,26 +43,80 @@ function Layout() {
               Portfolio demo — simulated money only.
             </p>
           </div>
-          <nav aria-label="Main">
-            <ul className="flex flex-wrap items-center gap-2">
-              <li>
-                <NavLink
-                  to="/"
-                  end
-                  className={({ isActive }) =>
-                    `${NAV_LINK_BASE} ${isActive ? NAV_LINK_ACTIVE : NAV_LINK_IDLE}`
-                  }
-                >
-                  Home
-                </NavLink>
-              </li>
-            </ul>
-          </nav>
+          <MainNav />
         </div>
       </header>
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
         <Outlet />
       </main>
     </div>
+  );
+}
+
+/**
+ * Signed in: account items and Sign out. Signed out: Sign in and Register. While the session is
+ * being restored neither set is shown, so the navigation does not flicker between them.
+ */
+function MainNav() {
+  const { status, logout } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const inFlight = useRef(false);
+
+  const onSignOut = () => {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    setSigningOut(true);
+    // logout() never throws and navigates to /login; the layout stays mounted, so reset after.
+    void logout().finally(() => {
+      inFlight.current = false;
+      setSigningOut(false);
+    });
+  };
+
+  return (
+    <nav aria-label="Main">
+      <ul className="flex flex-wrap items-center gap-2">
+        <li>
+          <NavLink to="/" end className={navClass}>
+            Home
+          </NavLink>
+        </li>
+        {status === 'signedIn' && (
+          <>
+            <li>
+              <NavLink to="/settings/password" className={navClass}>
+                Change password
+              </NavLink>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={onSignOut}
+                disabled={signingOut}
+                className={`${NAV_LINK_BASE} ${NAV_LINK_IDLE} disabled:cursor-not-allowed disabled:opacity-70`}
+              >
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+            </li>
+          </>
+        )}
+        {status === 'signedOut' && (
+          <>
+            <li>
+              <NavLink to="/login" className={navClass}>
+                Sign in
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/register" className={navClass}>
+                Register
+              </NavLink>
+            </li>
+          </>
+        )}
+      </ul>
+    </nav>
   );
 }

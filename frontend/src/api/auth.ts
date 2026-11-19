@@ -117,7 +117,7 @@ export async function logout(): Promise<void> {
   } catch {
     // Network or server failure: local state is cleared below regardless.
   } finally {
-    clearSession();
+    clearSession('loggedOut');
   }
 }
 
@@ -137,7 +137,8 @@ export class SessionEndedError extends Error {
  * Changes the password. A 401 here means a wrong current password, so it never triggers a
  * refresh (the client's opt-out list). To keep that 401 unambiguous, an expired access token is
  * refreshed before the call. On success the server ends every session and clears the cookie,
- * so local state is cleared too.
+ * so the local session ends with the reason `passwordChanged`: the app goes to /login with the
+ * "Password changed" notice from the session layer, not from the page.
  */
 export async function changePassword(request: ChangePasswordRequest): Promise<void> {
   if (!hasFreshAccessToken() && (await refreshAccessToken()) === 'signedOut') {
@@ -145,5 +146,5 @@ export async function changePassword(request: ChangePasswordRequest): Promise<vo
     throw new SessionEndedError();
   }
   await post<void>('/change-password', request);
-  clearSession();
+  endSession('passwordChanged');
 }

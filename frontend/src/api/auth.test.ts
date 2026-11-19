@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getAccessToken, getSessionSnapshot, onSessionEnded, setSession } from '../auth/tokenStore';
+import {
+  getAccessToken,
+  getSessionEndReason,
+  getSessionSnapshot,
+  onSessionEnded,
+  setSession,
+} from '../auth/tokenStore';
 import {
   emptyResponse,
   errorResponse,
@@ -273,14 +279,17 @@ describe('logout', () => {
     await logout();
 
     expect(ended).not.toHaveBeenCalled();
+    expect(getSessionEndReason()).toBe('loggedOut');
   });
 });
 
 describe('changePassword', () => {
   const request = { currentPassword: 'c'.repeat(12), newPassword: 'n'.repeat(12) };
 
-  it('on success sends the bearer and clears the local session', async () => {
+  it('on success sends the bearer and ends the local session as passwordChanged', async () => {
     setSession(TOKEN, 900);
+    const ended = vi.fn();
+    onSessionEnded(ended);
     const http = stubFetch({ 'POST /api/v1/auth/change-password': () => emptyResponse(200) });
 
     await changePassword(request);
@@ -288,6 +297,8 @@ describe('changePassword', () => {
     expect(http.calls[0]?.headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
     expect(bodyOf(http.calls[0]?.body)).toEqual(request);
     expect(getAccessToken()).toBeNull();
+    expect(ended).toHaveBeenCalledExactlyOnceWith('passwordChanged');
+    expect(getSessionEndReason()).toBe('passwordChanged');
   });
 
   it('a 401 means a wrong current password: no refresh, session kept', async () => {
@@ -343,6 +354,6 @@ describe('changePassword', () => {
 
     await expect(changePassword(request)).rejects.toBeInstanceOf(SessionEndedError);
     expect(http.callsTo('POST', '/api/v1/auth/change-password')).toHaveLength(0);
-    expect(ended).toHaveBeenCalledTimes(1);
+    expect(ended).toHaveBeenCalledExactlyOnceWith('sessionEnded');
   });
 });
