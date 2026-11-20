@@ -40,23 +40,25 @@ describe('HomePage', () => {
     expect(await screen.findByRole('heading', { name: 'Apply' })).toBeInTheDocument();
   });
 
-  it('shows a placeholder wallet summary once the wallet exists', async () => {
+  it('shows the wallet dashboard once the wallet exists', async () => {
     setSession(CUSTOMER, 900);
     stubFetch({
       'GET /actuator/health': health,
       'GET /api/v1/wallet': () =>
         jsonResponse(200, {
-          walletNumber: '1234567890',
+          walletNumber: '12345678903',
           status: 'ACTIVE',
           availableBalance: 1500.5,
           currency: 'THB',
         }),
+      'GET /api/v1/wallet/limits': () => jsonResponse(200, { currency: 'THB' }),
     });
     renderRoute('/');
 
-    expect(await walletRegion().findByText('1234567890')).toBeInTheDocument();
-    expect(walletRegion().getByText('ACTIVE')).toBeInTheDocument();
-    expect(walletRegion().getByText(/1,500\.50 THB/)).toHaveTextContent('(simulated money)');
+    expect(await walletRegion().findByText('12345678903')).toBeInTheDocument();
+    expect(walletRegion().getByText('Active')).toBeInTheDocument();
+    expect(walletRegion().getByText('1,500.50 THB')).toBeInTheDocument();
+    expect(walletRegion().getByText(/Simulated money/)).toBeInTheDocument();
   });
 
   it('shows other wallet errors with their reference', async () => {

@@ -88,6 +88,16 @@ function MainNav() {
             {hasRole('CUSTOMER') && (
               <>
                 <li>
+                  <NavLink to="/deposit" className={navClass}>
+                    Deposit
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/withdraw" className={navClass}>
+                    Withdraw
+                  </NavLink>
+                </li>
+                <li>
                   <NavLink to="/profile" className={navClass}>
                     Profile
                   </NavLink>

@@ -12,6 +12,7 @@ import { VerifyPage } from '../pages/auth/VerifyPage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RouteErrorPage } from '../pages/RouteErrorPage';
+import { MoneyMovementPage } from '../pages/wallet/MoneyMovementPage';
 import { RootLayout } from './RootLayout';
 
 const CUSTOMER_ONLY: readonly Role[] = ['CUSTOMER'];
@@ -41,6 +42,11 @@ export const routes: RouteObject[] = [
         children: [
           { path: 'profile', element: <ProfilePage /> },
           { path: 'kyc', element: <KycPage /> },
+          { path: 'deposit', element: <MoneyMovementPage key="deposit" kind="deposit" /> },
+          {
+            path: 'withdraw',
+            element: <MoneyMovementPage key="withdrawal" kind="withdrawal" />,
+          },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

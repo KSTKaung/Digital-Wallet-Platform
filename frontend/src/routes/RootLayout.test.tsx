@@ -41,7 +41,7 @@ describe('main navigation by session status', () => {
     );
   });
 
-  it('shows Profile and KYC to a signed-in customer', async () => {
+  it('shows Deposit, Withdraw, Profile and KYC to a signed-in customer', async () => {
     setSession(CUSTOMER, 900);
     stubFetch({
       'GET /actuator/health': health,
@@ -49,6 +49,8 @@ describe('main navigation by session status', () => {
     });
     renderRoute('/');
 
+    expect(nav().getByRole('link', { name: 'Deposit' })).toHaveAttribute('href', '/deposit');
+    expect(nav().getByRole('link', { name: 'Withdraw' })).toHaveAttribute('href', '/withdraw');
     expect(nav().getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile');
     expect(nav().getByRole('link', { name: 'KYC' })).toHaveAttribute('href', '/kyc');
     expect(await screen.findByText('Complete KYC to continue.')).toBeInTheDocument();
@@ -63,6 +65,8 @@ describe('main navigation by session status', () => {
     expect(nav().getByRole('link', { name: 'Change password' })).toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'KYC' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Deposit' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Withdraw' })).not.toBeInTheDocument();
     expect(await screen.findByText('Gateway is up')).toBeInTheDocument();
   });
 

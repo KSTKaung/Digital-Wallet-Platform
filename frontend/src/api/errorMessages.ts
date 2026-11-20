@@ -46,6 +46,15 @@ const MESSAGES: Readonly<Record<string, string>> = {
   // KYC (doc 02 §2.2, MVP-ADR-10; no doc 05 §5.3 entry). Screens override with their context.
   KYC_ALREADY_ACTIVE: 'You already have an active KYC application.',
   INVALID_KYC_STATE: 'This is not possible while your KYC application is in its current state.',
+  // Money movements (doc 02 §2.3 error list; no doc 05 §5.3 entry). INVALID_AMOUNT covers the
+  // format, the size and the minimum, so the text points at both.
+  SINGLE_LIMIT_EXCEEDED:
+    'The amount is above the limit for a single transaction. Use a smaller amount.',
+  INVALID_AMOUNT:
+    'This amount cannot be used. Check the minimum amount and use at most 2 decimal places.',
+  CURRENCY_MISMATCH: 'Only Thai baht (THB) is supported.',
+  IDEMPOTENCY_KEY_REUSED:
+    'This confirmation no longer matches your request. Check the details and confirm again.',
 };
 
 /** Codes whose text gets "Please wait N seconds" when the server sent Retry-After. */
@@ -71,6 +80,9 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   documentReference: 'Document reference',
   firstName: 'First name',
   lastName: 'Last name',
+  amount: 'Amount',
+  currency: 'Currency',
+  reference: 'Note',
 };
 
 export function describeError(error: unknown, overrides: ErrorOverrides = {}): DescribedError {

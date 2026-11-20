@@ -26,6 +26,10 @@ describe('describeError', () => {
     ['SYSTEM_ERROR', /on our side/],
     ['FORBIDDEN', /not available for your account/],
     ['NOT_FOUND', /could not find/],
+    ['SINGLE_LIMIT_EXCEEDED', /above the limit for a single transaction/],
+    ['INVALID_AMOUNT', /minimum amount and use at most 2 decimal places/],
+    ['CURRENCY_MISMATCH', /Only Thai baht \(THB\)/],
+    ['IDEMPOTENCY_KEY_REUSED', /no longer matches your request/],
   ])('maps %s to customer text', (code, expected) => {
     const described = describeError(err(400, code));
     expect(described.message).toMatch(expected);
@@ -59,6 +63,19 @@ describe('describeError', () => {
     );
     expect(describeError(err(400, 'VALIDATION_ERROR', '  ')).message).toBe(
       'Please check the form and try again.',
+    );
+  });
+
+  it('labels the money request fields', () => {
+    expect(describeError(err(400, 'VALIDATION_ERROR', 'amount: must not be null')).message).toBe(
+      'Amount must not be null.',
+    );
+    expect(
+      describeError(err(400, 'VALIDATION_ERROR', 'reference: must contain a letter or digit'))
+        .message,
+    ).toBe('Note must contain a letter or digit.');
+    expect(describeError(err(400, 'VALIDATION_ERROR', 'currency: must not be null')).message).toBe(
+      'Currency must not be null.',
     );
   });
 
