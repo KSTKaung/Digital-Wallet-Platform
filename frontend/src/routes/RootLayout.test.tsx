@@ -41,7 +41,7 @@ describe('main navigation by session status', () => {
     );
   });
 
-  it('shows Deposit, Withdraw, Profile and KYC to a signed-in customer', async () => {
+  it('shows Deposit, Withdraw, Transfer, Transfers, History, Profile and KYC to a signed-in customer', async () => {
     setSession(CUSTOMER, 900);
     stubFetch({
       'GET /actuator/health': health,
@@ -51,6 +51,9 @@ describe('main navigation by session status', () => {
 
     expect(nav().getByRole('link', { name: 'Deposit' })).toHaveAttribute('href', '/deposit');
     expect(nav().getByRole('link', { name: 'Withdraw' })).toHaveAttribute('href', '/withdraw');
+    expect(nav().getByRole('link', { name: 'Transfer' })).toHaveAttribute('href', '/transfer');
+    expect(nav().getByRole('link', { name: 'Transfers' })).toHaveAttribute('href', '/transfers');
+    expect(nav().getByRole('link', { name: 'History' })).toHaveAttribute('href', '/transactions');
     expect(nav().getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile');
     expect(nav().getByRole('link', { name: 'KYC' })).toHaveAttribute('href', '/kyc');
     expect(await screen.findByText('Complete KYC to continue.')).toBeInTheDocument();
@@ -67,6 +70,9 @@ describe('main navigation by session status', () => {
     expect(nav().queryByRole('link', { name: 'KYC' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Deposit' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Withdraw' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Transfer' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Transfers' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'History' })).not.toBeInTheDocument();
     expect(await screen.findByText('Gateway is up')).toBeInTheDocument();
   });
 
@@ -83,6 +89,8 @@ describe('main navigation by session status', () => {
     expect(nav().queryByRole('link', { name: 'Change password' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'KYC' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Transfer' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'History' })).not.toBeInTheDocument();
   });
 
   it('signs out once on a double click and returns to the signed-out navigation', async () => {

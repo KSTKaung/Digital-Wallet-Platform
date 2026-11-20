@@ -11,6 +11,8 @@ export type WalletStatusResult = ResponseBodyOf<'/api/v1/wallet/freeze', 'post'>
 /** `201` body of a deposit or a withdrawal; `reference` is the server's `DEP-…` / `WDR-…`. */
 export type MoneyMovement = ResponseBodyOf<'/api/v1/wallet/deposits', 'post', 201>;
 export type WithdrawalMovement = ResponseBodyOf<'/api/v1/wallet/withdrawals', 'post', 201>;
+/** `{maskedName, maskedWalletNumber}` of a recipient (doc 02 §2.3, MVP-ADR-20). */
+export type WalletLookup = ResponseBodyOf<'/api/v1/wallets/lookup', 'get'>;
 
 type DepositBody = RequestBodyOf<'/api/v1/wallet/deposits', 'post'>;
 type WithdrawalBody = RequestBodyOf<'/api/v1/wallet/withdrawals', 'post'>;
@@ -43,6 +45,18 @@ export function getWallet(signal?: AbortSignal): Promise<Wallet> {
 /** Display only (D8): the server applies the limits. */
 export function getLimits(signal?: AbortSignal): Promise<WalletLimits> {
   return apiRequest<WalletLimits>('/api/v1/wallet/limits', { signal });
+}
+
+/**
+ * Finds a recipient by exact wallet number (doc 02 §2.3 "MVP wallet lookup"). The number travels
+ * only in the query string, never in a path. A missing, frozen or closed wallet, the caller's own
+ * and a wrong check digit are one identical `404`; over the lookup windows it is `429` with
+ * `Retry-After`. The caller without a wallet gets `403 KYC_REQUIRED`, a frozen caller
+ * `409 WALLET_FROZEN`.
+ */
+export function lookupWallet(walletNumber: string, signal?: AbortSignal): Promise<WalletLookup> {
+  const query = new URLSearchParams({ walletNumber }).toString();
+  return apiRequest<WalletLookup>(`/api/v1/wallets/lookup?${query}`, { signal });
 }
 
 /** Self-service freeze; repeating it changes nothing. Only staff unfreeze (doc 05 §5.2). */

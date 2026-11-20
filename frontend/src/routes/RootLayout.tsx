@@ -98,6 +98,21 @@ function MainNav() {
                   </NavLink>
                 </li>
                 <li>
+                  <NavLink to="/transfer" className={navClass}>
+                    Transfer
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/transfers" className={navClass}>
+                    Transfers
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/transactions" className={navClass}>
+                    History
+                  </NavLink>
+                </li>
+                <li>
                   <NavLink to="/profile" className={navClass}>
                     Profile
                   </NavLink>

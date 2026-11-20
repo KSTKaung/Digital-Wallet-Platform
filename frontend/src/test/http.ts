@@ -20,6 +20,8 @@ export function errorResponse(status: number, errorCode: string, message = 'Refu
 export interface RecordedRequest {
   method: string;
   path: string;
+  /** The query string with its "?", or "" (e.g. "?page=0&size=20"). */
+  search: string;
   headers: Headers;
   body: string | undefined;
   credentials: RequestCredentials | undefined;
@@ -39,6 +41,7 @@ export function stubFetch(routes: Record<string, Handler | Handler[]>) {
     const request: RecordedRequest = {
       method: (init.method ?? 'GET').toUpperCase(),
       path: url.pathname,
+      search: url.search,
       headers: new Headers(init.headers),
       body: typeof init.body === 'string' ? init.body : undefined,
       credentials: init.credentials,

@@ -54,6 +54,7 @@ describe('WalletDashboard', () => {
     expect(wallet.getByText(/Simulated money/)).toBeInTheDocument();
     expect(wallet.getByRole('link', { name: 'Deposit' })).toHaveAttribute('href', '/deposit');
     expect(wallet.getByRole('link', { name: 'Withdraw' })).toHaveAttribute('href', '/withdraw');
+    expect(wallet.getByRole('link', { name: 'Transfer' })).toHaveAttribute('href', '/transfer');
     expect(wallet.getByRole('button', { name: 'Freeze wallet' })).toBeInTheDocument();
 
     const limits = within(await screen.findByRole('region', { name: 'Limits' }));
@@ -109,7 +110,7 @@ describe('WalletDashboard', () => {
     expect(walletRegion().getByText('1,500.50 THB')).toBeInTheDocument();
   });
 
-  it('for a frozen wallet hides deposit, withdraw and freeze and says only staff unfreeze', async () => {
+  it('for a frozen wallet hides deposit, withdraw, transfer and freeze and says only staff unfreeze', async () => {
     setSession(CUSTOMER, 900);
     stubs({ 'GET /api/v1/wallet': () => jsonResponse(200, FROZEN_WALLET) });
     renderRoute('/');
@@ -118,6 +119,7 @@ describe('WalletDashboard', () => {
     expect(walletRegion().getByText(FROZEN_EXPLANATION)).toBeInTheDocument();
     expect(walletRegion().queryByRole('link', { name: 'Deposit' })).not.toBeInTheDocument();
     expect(walletRegion().queryByRole('link', { name: 'Withdraw' })).not.toBeInTheDocument();
+    expect(walletRegion().queryByRole('link', { name: 'Transfer' })).not.toBeInTheDocument();
     expect(walletRegion().queryByRole('button', { name: 'Freeze wallet' })).not.toBeInTheDocument();
   });
 

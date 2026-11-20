@@ -22,7 +22,7 @@ const PANEL_CLASSES =
 
 /**
  * The customer's wallet (doc 02 §2.3; doc 05 §5.2): balance, number, status, tier, creation time
- * in Bangkok time, limits as information, the deposit and withdrawal entry points and the
+ * in Bangkok time, limits as information, the deposit, withdrawal and transfer entry points and the
  * self-service freeze. Before KYC approval the KYC notice is shown instead. Refreshed by a button
  * and on window focus (documentations/08 §4D D7).
  */
@@ -127,7 +127,7 @@ function WalletDetails({ wallet }: { wallet: Wallet }) {
   );
 }
 
-/** Deposit and withdraw entry points; for a wallet that is not active, why they are missing. */
+/** Deposit, withdraw and transfer entry points; for a wallet that is not active, why they are missing. */
 function MoneyActions({ status }: { status: string | undefined }) {
   const explanation = notActiveExplanation(status);
   if (explanation !== null) {
@@ -144,6 +144,9 @@ function MoneyActions({ status }: { status: string | undefined }) {
       </Link>
       <Link to="/withdraw" className={PRIMARY_BUTTON_CLASSES}>
         Withdraw
+      </Link>
+      <Link to="/transfer" className={PRIMARY_BUTTON_CLASSES}>
+        Transfer
       </Link>
     </div>
   );

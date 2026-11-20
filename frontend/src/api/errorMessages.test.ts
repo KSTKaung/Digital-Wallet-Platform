@@ -30,6 +30,9 @@ describe('describeError', () => {
     ['INVALID_AMOUNT', /minimum amount and use at most 2 decimal places/],
     ['CURRENCY_MISMATCH', /Only Thai baht \(THB\)/],
     ['IDEMPOTENCY_KEY_REUSED', /no longer matches your request/],
+    ['SELF_TRANSFER', /^You cannot send money to your own wallet.$/],
+    ['RISK_BLOCKED', /^The transfer was refused.$/],
+    ['INVALID_TRANSFER_STATE', /can no longer be cancelled/],
   ])('maps %s to customer text', (code, expected) => {
     const described = describeError(err(400, code));
     expect(described.message).toMatch(expected);
@@ -77,6 +80,21 @@ describe('describeError', () => {
     expect(describeError(err(400, 'VALIDATION_ERROR', 'currency: must not be null')).message).toBe(
       'Currency must not be null.',
     );
+  });
+
+  it('labels the transfer request fields', () => {
+    expect(
+      describeError(err(400, 'VALIDATION_ERROR', 'receiverWalletNumber: must be 11 digits'))
+        .message,
+    ).toBe('Wallet number must be 11 digits.');
+    expect(
+      describeError(err(400, 'VALIDATION_ERROR', 'walletNumber: parameter is required')).message,
+    ).toBe('Wallet number parameter is required.');
+    expect(
+      describeError(
+        err(400, 'VALIDATION_ERROR', 'description: must not contain control or format characters'),
+      ).message,
+    ).toBe('Description must not contain control or format characters.');
   });
 
   it('adds the Retry-After wait to 429 and 503 messages', () => {

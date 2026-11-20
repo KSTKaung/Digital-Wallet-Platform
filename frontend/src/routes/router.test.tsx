@@ -57,6 +57,21 @@ describe('app routes', () => {
     expect(http.callsTo('POST', '/api/v1/auth/refresh')).toHaveLength(1);
   });
 
+  it.each([
+    ['/transfer'],
+    ['/transfers'],
+    ['/transfers/5f0c2b1e-7a3d-4c8e-9b6f-1a2b3c4d5e01'],
+    ['/transactions'],
+  ])('sends a signed-out visitor of %s to sign in, without calling the API', async (path) => {
+    const router = renderAt(path);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/login');
+    expect(http.calls.filter((call) => call.path.startsWith('/api/v1/transfers'))).toHaveLength(0);
+    expect(http.callsTo('GET', '/api/v1/transactions')).toHaveLength(0);
+    expect(http.callsTo('GET', '/api/v1/wallet')).toHaveLength(0);
+  });
+
   it('navigates from the not-found page back home', async () => {
     const user = userEvent.setup();
     const router = renderAt('/missing/deep/path');

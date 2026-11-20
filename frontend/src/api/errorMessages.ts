@@ -55,6 +55,11 @@ const MESSAGES: Readonly<Record<string, string>> = {
   CURRENCY_MISMATCH: 'Only Thai baht (THB) is supported.',
   IDEMPOTENCY_KEY_REUSED:
     'This confirmation no longer matches your request. Check the details and confirm again.',
+  // Transfers (doc 02 §2.4; no doc 05 §5.3 entry). RISK_BLOCKED never says why (MVP-ADR-24).
+  SELF_TRANSFER: 'You cannot send money to your own wallet.',
+  RISK_BLOCKED: 'The transfer was refused.',
+  INVALID_TRANSFER_STATE:
+    'This transfer can no longer be cancelled: it has already been decided or has expired.',
 };
 
 /** Codes whose text gets "Please wait N seconds" when the server sent Retry-After. */
@@ -83,6 +88,9 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   amount: 'Amount',
   currency: 'Currency',
   reference: 'Note',
+  walletNumber: 'Wallet number',
+  receiverWalletNumber: 'Wallet number',
+  description: 'Description',
 };
 
 export function describeError(error: unknown, overrides: ErrorOverrides = {}): DescribedError {

@@ -12,6 +12,10 @@ import { VerifyPage } from '../pages/auth/VerifyPage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RouteErrorPage } from '../pages/RouteErrorPage';
+import { TransactionsPage } from '../pages/transactions/TransactionsPage';
+import { TransferDetailPage } from '../pages/transfer/TransferDetailPage';
+import { TransferPage } from '../pages/transfer/TransferPage';
+import { TransfersPage } from '../pages/transfer/TransfersPage';
 import { MoneyMovementPage } from '../pages/wallet/MoneyMovementPage';
 import { RootLayout } from './RootLayout';
 
@@ -47,6 +51,10 @@ export const routes: RouteObject[] = [
             path: 'withdraw',
             element: <MoneyMovementPage key="withdrawal" kind="withdrawal" />,
           },
+          { path: 'transfer', element: <TransferPage /> },
+          { path: 'transfers', element: <TransfersPage /> },
+          { path: 'transfers/:id', element: <TransferDetailPage /> },
+          { path: 'transactions', element: <TransactionsPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },
