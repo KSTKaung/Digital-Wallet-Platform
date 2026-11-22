@@ -1,6 +1,6 @@
-// Staff (back-office) endpoints under /api/v1/admin (doc 02 §2.7; doc 06 MVP-ADR-10, -12). The
-// server admits only the right role to each path (SecurityConfig): KYC decisions need
-// COMPLIANCE_OFFICER. None of these takes an Idempotency-Key: they decide an existing record, and
+// Staff (back-office) endpoints under /api/v1/admin (doc 02 §2.7; doc 06 MVP-ADR-10, -12, -24).
+// The server admits only the right role to each path (SecurityConfig): KYC and transfer review
+// decisions need COMPLIANCE_OFFICER. None of these takes an Idempotency-Key: they decide an existing record, and
 // a repeat is `409` and changes nothing. Request and response bodies are never logged.
 
 import { apiRequest } from './client';
@@ -86,6 +86,111 @@ export function approveKycApplication(id: string): Promise<KycReviewDetail> {
  */
 export function rejectKycApplication(id: string, reason: string): Promise<KycReviewDetail> {
   return apiRequest<KycReviewDetail>(`${kycApplicationPath(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+type GeneratedTransferReviewPage = ResponseBodyOf<'/api/v1/admin/transfer-reviews', 'get'>;
+type GeneratedTransferReviewSummary = NonNullable<GeneratedTransferReviewPage['items']>[number];
+type GeneratedTransferReviewDetail = ResponseBodyOf<
+  '/api/v1/admin/transfer-reviews/{transferId}',
+  'get'
+>;
+type GeneratedTransferReviewHistory = NonNullable<GeneratedTransferReviewDetail['history']>[number];
+
+/**
+ * One queue row (`PENDING_REVIEW` only, soonest deadline first; overdue ones stay until expired).
+ * `score` is a nullable Integer on the server (TransferReviewSummaryResponse), so it is widened.
+ */
+export type TransferReviewSummary = Omit<GeneratedTransferReviewSummary, 'score'> & {
+  score?: number | null;
+};
+
+export type TransferReviewPage = Omit<GeneratedTransferReviewPage, 'items'> & {
+  items?: TransferReviewSummary[];
+};
+
+/**
+ * The review outcome (0 or 1 items). The generated type cannot say which facts are `null` for a
+ * given outcome: `requestedAction` and `actorUserId` for the expiry job, `reasonCategory` and
+ * `reason` except for a staff rejection, `systemReason` except for a system outcome.
+ */
+export type TransferReviewHistory = Omit<
+  GeneratedTransferReviewHistory,
+  'requestedAction' | 'actorUserId' | 'reasonCategory' | 'reason' | 'systemReason'
+> & {
+  requestedAction?: string | null;
+  actorUserId?: string | null;
+  reasonCategory?: string | null;
+  reason?: string | null;
+  systemReason?: string | null;
+};
+
+/**
+ * The staff detail of a transfer that was ever held for review (doc 02 §2.7 "As built"). The
+ * generated type cannot say that `decidedAt`, `rejectionReasonCategory` and `ledgerStatus` are
+ * `null` while they do not apply, so those are widened, as is the history.
+ */
+export type TransferReviewDetail = Omit<
+  GeneratedTransferReviewDetail,
+  'decidedAt' | 'rejectionReasonCategory' | 'ledgerStatus' | 'history'
+> & {
+  decidedAt?: string | null;
+  rejectionReasonCategory?: string | null;
+  ledgerStatus?: string | null;
+  history?: TransferReviewHistory[];
+};
+
+/** The size of the reviewer's reason (ReviewOutcome.MAX_REASON_LENGTH, in code points). */
+export const TRANSFER_REJECTION_REASON_MAX_LENGTH = 500;
+
+const TRANSFER_REVIEWS = '/api/v1/admin/transfer-reviews';
+
+function transferReviewPath(transferId: string): string {
+  return `${TRANSFER_REVIEWS}/${encodeURIComponent(transferId)}`;
+}
+
+/** Held transfers, soonest review deadline first, then by id (doc 02 §2.7). */
+export function listTransferReviews(
+  query: PageQuery,
+  signal?: AbortSignal,
+): Promise<TransferReviewPage> {
+  return apiRequest<TransferReviewPage>(`${TRANSFER_REVIEWS}${pageQueryString(query)}`, {
+    signal,
+  });
+}
+
+/** A missing id and a transfer that was never held are the same `404`; a malformed id is `400`. */
+export function getTransferReview(
+  transferId: string,
+  signal?: AbortSignal,
+): Promise<TransferReviewDetail> {
+  return apiRequest<TransferReviewDetail>(transferReviewPath(transferId), { signal });
+}
+
+/**
+ * PENDING_REVIEW → COMPLETED (or REJECTED with WALLET_UNAVAILABLE if a wallet is frozen or
+ * closed). `200` with the detail as committed; `403 FORBIDDEN` when the reviewer is the sender or
+ * the recipient (nothing changes); `409 INVALID_TRANSFER_STATE` when it is no longer held, or when
+ * the deadline had passed (the transfer is then expired).
+ */
+export function approveTransferReview(transferId: string): Promise<TransferReviewDetail> {
+  return apiRequest<TransferReviewDetail>(`${transferReviewPath(transferId)}/approve`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * PENDING_REVIEW → REJECTED (REVIEW_DECLINED), the held amount back to the sender. The reason is
+ * staff-only and required: before the deadline a blank or invalid one is `400 VALIDATION_ERROR`
+ * naming `reason`. Other errors as approveTransferReview. The reason is sent as typed.
+ */
+export function rejectTransferReview(
+  transferId: string,
+  reason: string,
+): Promise<TransferReviewDetail> {
+  return apiRequest<TransferReviewDetail>(`${transferReviewPath(transferId)}/reject`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });

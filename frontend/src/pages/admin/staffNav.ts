@@ -15,6 +15,7 @@ export const COMPLIANCE_ROLES: readonly Role[] = ['COMPLIANCE_OFFICER'];
 
 export const STAFF_NAV_ITEMS: readonly StaffNavItem[] = [
   { to: '/admin/kyc', label: 'KYC reviews', roles: COMPLIANCE_ROLES },
+  { to: '/admin/transfer-reviews', label: 'Transfer reviews', roles: COMPLIANCE_ROLES },
 ];
 
 /** The items the signed-in user may use, in navigation order. */

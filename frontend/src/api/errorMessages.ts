@@ -72,6 +72,21 @@ export const STAFF_ERROR_OVERRIDES: ErrorOverrides = {
   INVALID_KYC_STATE:
     'This application is no longer pending review: another officer or an earlier decision has already decided it. The latest details are shown.',
   FORBIDDEN: 'Your staff role does not allow this action.',
+  // A transfer review decision (doc 02 §2.7): decided, cancelled or expired meanwhile, or a
+  // decision at or after the review deadline, which expires the transfer (MVP-ADR-24 case 6).
+  INVALID_TRANSFER_STATE:
+    'This transfer is no longer held for review: it has already been decided, cancelled by the sender or expired. A decision at or after the review deadline expires the transfer. The latest details are shown.',
+};
+
+/**
+ * A transfer review decision: the server answers `403 FORBIDDEN` when the reviewer is the sender or
+ * the recipient (MVP-ADR-24), and nothing changes. The same code is the role refusal, which the
+ * route guard makes unlikely here, so the text covers both.
+ */
+export const TRANSFER_DECISION_ERROR_OVERRIDES: ErrorOverrides = {
+  ...STAFF_ERROR_OVERRIDES,
+  FORBIDDEN:
+    'You cannot review a transfer you take part in as the sender or the recipient, and only a compliance officer can decide transfers. Nothing has changed.',
 };
 
 /** Codes whose text gets "Please wait N seconds" when the server sent Retry-After. */

@@ -5,6 +5,8 @@ import { CUSTOMER_ROLES, STAFF_ROLES } from '../auth/roles';
 import { AdminHome } from '../pages/admin/AdminHome';
 import { KycQueuePage } from '../pages/admin/KycQueuePage';
 import { KycReviewPage } from '../pages/admin/KycReviewPage';
+import { TransferReviewPage } from '../pages/admin/TransferReviewPage';
+import { TransferReviewQueuePage } from '../pages/admin/TransferReviewQueuePage';
 import { COMPLIANCE_ROLES } from '../pages/admin/staffNav';
 import { KycPage } from '../pages/kyc/KycPage';
 import { ProfilePage } from '../pages/ProfilePage';
@@ -71,6 +73,8 @@ export const routes: RouteObject[] = [
             children: [
               { path: 'kyc', element: <KycQueuePage /> },
               { path: 'kyc/:id', element: <KycReviewPage /> },
+              { path: 'transfer-reviews', element: <TransferReviewQueuePage /> },
+              { path: 'transfer-reviews/:transferId', element: <TransferReviewPage /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

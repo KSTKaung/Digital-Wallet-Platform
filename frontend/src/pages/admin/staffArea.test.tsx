@@ -12,9 +12,12 @@ import {
 } from '../../test/kycReviewFixtures';
 import { renderRoute } from '../../test/render';
 import { page } from '../../test/transferFixtures';
+import { PENDING_ITEM, TRANSFER_ID } from '../../test/transferReviewFixtures';
 import { NO_STAFF_TOOLS_MESSAGE } from './staffNav';
 
 const LIST = '/api/v1/admin/kyc/applications';
+const TRANSFER_LIST = '/api/v1/admin/transfer-reviews';
+const TRANSFER_PAGES = ['/admin/transfer-reviews', `/admin/transfer-reviews/${TRANSFER_ID}`];
 const health = () => jsonResponse(200, { status: 'UP' });
 
 function nav() {
@@ -26,6 +29,7 @@ function stubs(extra: Parameters<typeof stubFetch>[0] = {}) {
     'GET /actuator/health': health,
     'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
     [`GET ${LIST}`]: () => jsonResponse(200, page([PENDING_SUMMARY])),
+    [`GET ${TRANSFER_LIST}`]: () => jsonResponse(200, page([PENDING_ITEM])),
     ...extra,
   });
 }
@@ -35,7 +39,7 @@ function adminCalls(http: ReturnType<typeof stubFetch>) {
 }
 
 describe('staff navigation by role', () => {
-  it('shows KYC reviews to a compliance officer, in the navigation and on the home page', async () => {
+  it('shows KYC and transfer reviews to a compliance officer, in the navigation and on the home page', async () => {
     setSession(COMPLIANCE, 900);
     const http = stubs();
     renderRoute('/');
@@ -45,6 +49,14 @@ describe('staff navigation by role', () => {
     expect(nav().queryByRole('link', { name: 'KYC' })).not.toBeInTheDocument();
     const area = within(screen.getByRole('region', { name: 'Staff area' }));
     expect(area.getByRole('link', { name: 'KYC reviews' })).toHaveAttribute('href', '/admin/kyc');
+    expect(area.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'KYC reviews',
+      'Transfer reviews',
+    ]);
+    expect(nav().getByRole('link', { name: 'Transfer reviews' })).toHaveAttribute(
+      'href',
+      '/admin/transfer-reviews',
+    );
     expect(await screen.findByText('Gateway is up')).toBeInTheDocument();
     expect(http.callsTo('GET', '/api/v1/wallet')).toHaveLength(0);
   });
@@ -55,6 +67,7 @@ describe('staff navigation by role', () => {
     renderRoute('/');
 
     expect(nav().queryByRole('link', { name: 'KYC reviews' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Transfer reviews' })).not.toBeInTheDocument();
     expect(nav().getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     const area = within(screen.getByRole('region', { name: 'Staff area' }));
     expect(area.getByText(NO_STAFF_TOOLS_MESSAGE)).toBeInTheDocument();
@@ -69,6 +82,7 @@ describe('staff navigation by role', () => {
 
     expect(nav().getByRole('link', { name: 'Deposit' })).toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'KYC reviews' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Transfer reviews' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Staff area' })).not.toBeInTheDocument();
     expect(await screen.findByText('Complete KYC to continue.')).toBeInTheDocument();
   });
@@ -90,6 +104,29 @@ describe('/admin', () => {
     );
     expect(await screen.findByText('Somchai J.')).toBeInTheDocument();
     expect(http.callsTo('GET', LIST)).toHaveLength(1);
+    expect(http.callsTo('GET', TRANSFER_LIST)).toHaveLength(0);
+  });
+
+  it('opens the transfer review queue from the navigation', async () => {
+    const user = userEvent.setup();
+    setSession(COMPLIANCE, 900);
+    const http = stubs();
+    const router = renderRoute('/admin');
+    await screen.findByText('Somchai J.');
+
+    await user.click(nav().getByRole('link', { name: 'Transfer reviews' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Transfer reviews' }),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/admin/transfer-reviews');
+    expect(nav().getByRole('link', { name: 'Transfer reviews' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(nav().getByRole('link', { name: 'KYC reviews' })).not.toHaveAttribute('aria-current');
+    expect(await screen.findByText('TRF-20261121-0001')).toBeInTheDocument();
+    expect(http.callsTo('GET', TRANSFER_LIST)).toHaveLength(1);
   });
 
   it('tells an admin there are no staff tools yet, without calling the API', () => {
@@ -103,7 +140,7 @@ describe('/admin', () => {
     expect(adminCalls(http)).toHaveLength(0);
   });
 
-  it.each([['/admin/kyc'], [`/admin/kyc/${APPLICATION_ID}`]])(
+  it.each([['/admin/kyc'], [`/admin/kyc/${APPLICATION_ID}`], ...TRANSFER_PAGES.map((p) => [p])])(
     'refuses %s to an admin without calling the API',
     (path) => {
       setSession(ADMIN, 900);
@@ -115,30 +152,35 @@ describe('/admin', () => {
     },
   );
 
-  it.each([['/admin'], ['/admin/kyc'], [`/admin/kyc/${APPLICATION_ID}`], ['/ADMIN/KYC']])(
-    'shows a customer at %s "Not available" and calls no admin API',
-    (path) => {
-      setSession(CUSTOMER, 900);
-      const http = stubs();
-      renderRoute(path);
+  it.each([
+    ['/admin'],
+    ['/admin/kyc'],
+    [`/admin/kyc/${APPLICATION_ID}`],
+    ['/ADMIN/KYC'],
+    ...TRANSFER_PAGES.map((p) => [p]),
+  ])('shows a customer at %s "Not available" and calls no admin API', (path) => {
+    setSession(CUSTOMER, 900);
+    const http = stubs();
+    renderRoute(path);
 
-      expect(screen.getByRole('heading', { level: 1, name: 'Not available' })).toBeInTheDocument();
-      expect(nav().queryByRole('link', { name: 'KYC reviews' })).not.toBeInTheDocument();
-      expect(adminCalls(http)).toHaveLength(0);
-    },
-  );
+    expect(screen.getByRole('heading', { level: 1, name: 'Not available' })).toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'KYC reviews' })).not.toBeInTheDocument();
+    expect(adminCalls(http)).toHaveLength(0);
+  });
 
-  it.each([['/admin'], ['/admin/kyc'], [`/admin/kyc/${APPLICATION_ID}`]])(
-    'sends a signed-out visitor of %s to sign in, without calling the admin API',
-    async (path) => {
-      const http = stubs();
-      const router = renderRoute(path);
+  it.each([
+    ['/admin'],
+    ['/admin/kyc'],
+    [`/admin/kyc/${APPLICATION_ID}`],
+    ...TRANSFER_PAGES.map((p) => [p]),
+  ])('sends a signed-out visitor of %s to sign in, without calling the admin API', async (path) => {
+    const http = stubs();
+    const router = renderRoute(path);
 
-      expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
-      expect(router.state.location.pathname).toBe('/login');
-      expect(adminCalls(http)).toHaveLength(0);
-    },
-  );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/login');
+    expect(adminCalls(http)).toHaveLength(0);
+  });
 
   it('returns a compliance officer to the queue after signing in', async () => {
     const user = userEvent.setup();

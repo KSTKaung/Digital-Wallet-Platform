@@ -7,6 +7,7 @@ import {
   LOGIN_FAILED_MESSAGE,
   NETWORK_ERROR_MESSAGE,
   STAFF_ERROR_OVERRIDES,
+  TRANSFER_DECISION_ERROR_OVERRIDES,
   waitText,
 } from './errorMessages';
 import { ApiError } from './http';
@@ -201,6 +202,21 @@ describe('staff wording', () => {
     );
     expect(describeError(err(403, 'FORBIDDEN')).message).toBe(
       'This action is not available for your account.',
+    );
+  });
+
+  it('explains a late or repeated transfer decision and a party reviewer, leaving the customer texts', () => {
+    expect(describeError(err(409, 'INVALID_TRANSFER_STATE'), STAFF_ERROR_OVERRIDES).message).toBe(
+      'This transfer is no longer held for review: it has already been decided, cancelled by the sender or expired. A decision at or after the review deadline expires the transfer. The latest details are shown.',
+    );
+    expect(
+      describeError(err(409, 'INVALID_TRANSFER_STATE'), TRANSFER_DECISION_ERROR_OVERRIDES).message,
+    ).toBe(describeError(err(409, 'INVALID_TRANSFER_STATE'), STAFF_ERROR_OVERRIDES).message);
+    expect(describeError(err(403, 'FORBIDDEN'), TRANSFER_DECISION_ERROR_OVERRIDES).message).toBe(
+      'You cannot review a transfer you take part in as the sender or the recipient, and only a compliance officer can decide transfers. Nothing has changed.',
+    );
+    expect(describeError(err(409, 'INVALID_TRANSFER_STATE')).message).toBe(
+      'This transfer can no longer be cancelled: it has already been decided or has expired.',
     );
   });
 
