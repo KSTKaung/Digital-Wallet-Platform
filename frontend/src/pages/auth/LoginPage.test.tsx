@@ -97,10 +97,10 @@ describe('LoginPage', () => {
   });
 
   it.each([
-    ['no "from"', undefined, '/admin'],
-    ['a customer page', '/transfers', '/admin'],
-    ['a staff page', '/admin', '/admin'],
-  ])('lands an admin with %s on the staff page', async (_name, from, expected) => {
+    ['no "from"', undefined, '/admin/customers'],
+    ['a customer page', '/transfers', '/admin/customers'],
+    ['a staff page', '/admin', '/admin/customers'],
+  ])('lands an admin with %s on Wallet freeze', async (_name, from, expected) => {
     const user = userEvent.setup();
     stubs(() => tokenResponse(makeJwt({ sub: 'staff-a1', roles: ['ADMIN'], sid: 'sa' })));
     const router = renderRoute('/login', from === undefined ? undefined : { from });
@@ -108,7 +108,7 @@ describe('LoginPage', () => {
     await signIn(user);
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Staff area' }),
+      await screen.findByRole('heading', { level: 1, name: 'Wallet freeze' }),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(expected);
   });

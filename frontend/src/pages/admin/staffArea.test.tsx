@@ -13,11 +13,11 @@ import {
 import { renderRoute } from '../../test/render';
 import { page } from '../../test/transferFixtures';
 import { PENDING_ITEM, TRANSFER_ID } from '../../test/transferReviewFixtures';
-import { NO_STAFF_TOOLS_MESSAGE } from './staffNav';
 
 const LIST = '/api/v1/admin/kyc/applications';
 const TRANSFER_LIST = '/api/v1/admin/transfer-reviews';
 const TRANSFER_PAGES = ['/admin/transfer-reviews', `/admin/transfer-reviews/${TRANSFER_ID}`];
+const CUSTOMERS_PAGE = '/admin/customers';
 const health = () => jsonResponse(200, { status: 'UP' });
 
 function nav() {
@@ -57,22 +57,27 @@ describe('staff navigation by role', () => {
       'href',
       '/admin/transfer-reviews',
     );
+    expect(nav().queryByRole('link', { name: 'Wallet freeze' })).not.toBeInTheDocument();
     expect(await screen.findByText('Gateway is up')).toBeInTheDocument();
     expect(http.callsTo('GET', '/api/v1/wallet')).toHaveLength(0);
   });
 
-  it('shows no KYC reviews to an admin, and says there are no tools yet', async () => {
+  it('shows only Wallet freeze to an admin, in the navigation and on the home page', async () => {
     setSession(ADMIN, 900);
-    stubs();
+    const http = stubs();
     renderRoute('/');
 
     expect(nav().queryByRole('link', { name: 'KYC reviews' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Transfer reviews' })).not.toBeInTheDocument();
+    expect(nav().getByRole('link', { name: 'Wallet freeze' })).toHaveAttribute(
+      'href',
+      CUSTOMERS_PAGE,
+    );
     expect(nav().getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     const area = within(screen.getByRole('region', { name: 'Staff area' }));
-    expect(area.getByText(NO_STAFF_TOOLS_MESSAGE)).toBeInTheDocument();
-    expect(area.queryByRole('link')).not.toBeInTheDocument();
+    expect(area.getAllByRole('link').map((link) => link.textContent)).toEqual(['Wallet freeze']);
     expect(await screen.findByText('Gateway is up')).toBeInTheDocument();
+    expect(adminCalls(http)).toHaveLength(0);
   });
 
   it('shows no staff navigation to a customer', async () => {
@@ -83,6 +88,7 @@ describe('staff navigation by role', () => {
     expect(nav().getByRole('link', { name: 'Deposit' })).toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'KYC reviews' })).not.toBeInTheDocument();
     expect(nav().queryByRole('link', { name: 'Transfer reviews' })).not.toBeInTheDocument();
+    expect(nav().queryByRole('link', { name: 'Wallet freeze' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Staff area' })).not.toBeInTheDocument();
     expect(await screen.findByText('Complete KYC to continue.')).toBeInTheDocument();
   });
@@ -129,14 +135,30 @@ describe('/admin', () => {
     expect(http.callsTo('GET', TRANSFER_LIST)).toHaveLength(1);
   });
 
-  it('tells an admin there are no staff tools yet, without calling the API', () => {
+  it('takes an admin to Wallet freeze, without calling the API', async () => {
     setSession(ADMIN, 900);
     const http = stubs();
     const router = renderRoute('/admin');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Staff area' })).toBeInTheDocument();
-    expect(screen.getByText(NO_STAFF_TOOLS_MESSAGE)).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/admin');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Wallet freeze' }),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(CUSTOMERS_PAGE);
+    expect(router.state.location.search).toBe('');
+    expect(nav().getByRole('link', { name: 'Wallet freeze' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(adminCalls(http)).toHaveLength(0);
+  });
+
+  it('refuses Wallet freeze to a compliance officer without calling the API', () => {
+    setSession(COMPLIANCE, 900);
+    const http = stubs();
+    renderRoute(CUSTOMERS_PAGE);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Not available' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Customer ID')).not.toBeInTheDocument();
     expect(adminCalls(http)).toHaveLength(0);
   });
 
@@ -157,6 +179,7 @@ describe('/admin', () => {
     ['/admin/kyc'],
     [`/admin/kyc/${APPLICATION_ID}`],
     ['/ADMIN/KYC'],
+    [CUSTOMERS_PAGE],
     ...TRANSFER_PAGES.map((p) => [p]),
   ])('shows a customer at %s "Not available" and calls no admin API', (path) => {
     setSession(CUSTOMER, 900);
@@ -172,6 +195,7 @@ describe('/admin', () => {
     ['/admin'],
     ['/admin/kyc'],
     [`/admin/kyc/${APPLICATION_ID}`],
+    [CUSTOMERS_PAGE],
     ...TRANSFER_PAGES.map((p) => [p]),
   ])('sends a signed-out visitor of %s to sign in, without calling the admin API', async (path) => {
     const http = stubs();

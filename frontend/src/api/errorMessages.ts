@@ -119,6 +119,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   receiverWalletNumber: 'Wallet number',
   description: 'Description',
   reason: 'Reason',
+  customerId: 'Customer ID',
 };
 
 export function describeError(error: unknown, overrides: ErrorOverrides = {}): DescribedError {

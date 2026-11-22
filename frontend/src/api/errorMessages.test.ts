@@ -99,6 +99,16 @@ describe('describeError', () => {
     ).toBe('Description must not contain control or format characters.');
   });
 
+  it('labels the wallet freeze fields', () => {
+    expect(describeError(err(400, 'VALIDATION_ERROR', 'customerId: invalid value')).message).toBe(
+      'Customer ID invalid value.',
+    );
+    expect(
+      describeError(err(400, 'VALIDATION_ERROR', 'reason: must contain a letter or a digit'))
+        .message,
+    ).toBe('Reason must contain a letter or a digit.');
+  });
+
   it('adds the Retry-After wait to 429 and 503 messages', () => {
     expect(describeError(err(429, 'RATE_LIMITED', 'x', 30)).message).toBe(
       'Too many requests. Please wait 30 seconds and try again.',

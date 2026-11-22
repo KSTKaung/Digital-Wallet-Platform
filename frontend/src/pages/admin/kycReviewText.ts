@@ -3,6 +3,7 @@
 
 import { KYC_REJECTION_REASON_MAX_LENGTH, type KycReviewStatus } from '../../api/admin';
 import type { ChipTone } from '../../components/StatusChip';
+import { staffReasonError } from './staffReason';
 
 export const KYC_REVIEW_STATUS_OPTIONS: readonly { value: KycReviewStatus; label: string }[] = [
   { value: 'PENDING_REVIEW', label: 'Pending review' },
@@ -48,26 +49,9 @@ export const REJECTED_MESSAGE =
   'Application rejected. The customer can see the reason and may apply again.';
 
 /**
- * The format checks of RejectKycRequest and TextRules.requireReason: not blank, at most 500
- * characters (UTF-16 units, as @Size counts), no control, surrogate or format characters (a line
- * break is a control character, so the reason is one line) and at least one letter or digit. The
- * document-reference check is the server's (it answers `400` naming `reason`).
+ * The format checks of RejectKycRequest (staffReasonError). The document-reference check is the
+ * server's (it answers `400` naming `reason`).
  */
 export function rejectReasonError(reason: string): string | undefined {
-  if (reason.trim() === '') {
-    return 'Enter a reason.';
-  }
-  if (reason.length > KYC_REJECTION_REASON_MAX_LENGTH) {
-    return `Reason must have at most ${KYC_REJECTION_REASON_MAX_LENGTH} characters.`;
-  }
-  if (/[\r\n]/.test(reason)) {
-    return 'Reason must be on one line, without line breaks.';
-  }
-  if (/[\p{Cc}\p{Cs}\p{Cf}]/u.test(reason)) {
-    return 'Reason must not contain control characters or invisible formatting characters.';
-  }
-  if (!/[\p{L}\p{N}]/u.test(reason)) {
-    return 'Reason must contain a letter or a digit.';
-  }
-  return undefined;
+  return staffReasonError(reason, KYC_REJECTION_REASON_MAX_LENGTH);
 }

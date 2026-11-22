@@ -3,11 +3,12 @@ import { RequireAuth } from '../auth/RequireAuth';
 import { RequireRole } from '../auth/RequireRole';
 import { CUSTOMER_ROLES, STAFF_ROLES } from '../auth/roles';
 import { AdminHome } from '../pages/admin/AdminHome';
+import { CustomerWalletPage } from '../pages/admin/CustomerWalletPage';
 import { KycQueuePage } from '../pages/admin/KycQueuePage';
 import { KycReviewPage } from '../pages/admin/KycReviewPage';
 import { TransferReviewPage } from '../pages/admin/TransferReviewPage';
 import { TransferReviewQueuePage } from '../pages/admin/TransferReviewQueuePage';
-import { COMPLIANCE_ROLES } from '../pages/admin/staffNav';
+import { ADMIN_ROLES, COMPLIANCE_ROLES } from '../pages/admin/staffNav';
 import { KycPage } from '../pages/kyc/KycPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage';
@@ -76,6 +77,10 @@ export const routes: RouteObject[] = [
               { path: 'transfer-reviews', element: <TransferReviewQueuePage /> },
               { path: 'transfer-reviews/:transferId', element: <TransferReviewPage /> },
             ],
+          },
+          {
+            element: <RequireRole roles={ADMIN_ROLES} />,
+            children: [{ path: 'customers', element: <CustomerWalletPage /> }],
           },
           { path: '*', element: <NotFoundPage /> },
         ],

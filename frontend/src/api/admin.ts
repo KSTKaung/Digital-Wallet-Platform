@@ -1,11 +1,13 @@
 // Staff (back-office) endpoints under /api/v1/admin (doc 02 §2.7; doc 06 MVP-ADR-10, -12, -24).
 // The server admits only the right role to each path (SecurityConfig): KYC and transfer review
-// decisions need COMPLIANCE_OFFICER. None of these takes an Idempotency-Key: they decide an existing record, and
-// a repeat is `409` and changes nothing. Request and response bodies are never logged.
+// decisions need COMPLIANCE_OFFICER, wallet freeze and unfreeze need ADMIN. None of these takes an
+// Idempotency-Key: a review decision decides an existing record, and a repeat is `409` and changes
+// nothing; a repeated freeze or unfreeze is `200` with the current status and changes nothing.
+// Request and response bodies are never logged.
 
 import { apiRequest } from './client';
 import { pageQueryString, type PageQuery } from './paging';
-import type { ResponseBodyOf } from './types';
+import type { RequestBodyOf, ResponseBodyOf } from './types';
 
 type GeneratedKycReviewPage = ResponseBodyOf<'/api/v1/admin/kyc/applications', 'get'>;
 type GeneratedKycReviewSummary = NonNullable<GeneratedKycReviewPage['items']>[number];
@@ -194,4 +196,55 @@ export function rejectTransferReview(
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
+}
+
+type CustomerFreezePath = '/api/v1/admin/customers/{customerId}/freeze';
+type CustomerUnfreezePath = '/api/v1/admin/customers/{customerId}/unfreeze';
+
+/**
+ * `{status}` after a staff freeze or unfreeze (CustomerWalletStatusResponse): no balance and no
+ * wallet number. `ACTIVE` or `FROZEN` in the MVP; shown as sent.
+ */
+export type CustomerWalletStatus = ResponseBodyOf<CustomerFreezePath, 'post'> &
+  ResponseBodyOf<CustomerUnfreezePath, 'post'>;
+
+type WalletStatusReasonRequest = RequestBodyOf<CustomerFreezePath, 'post'> &
+  RequestBodyOf<CustomerUnfreezePath, 'post'>;
+
+/** The size of the freeze and unfreeze reason (WalletStatusReasonRequest @Size, UTF-16 units). */
+export const WALLET_STATUS_REASON_MAX_LENGTH = 500;
+
+function changeWalletStatus(
+  customerId: string,
+  action: 'freeze' | 'unfreeze',
+  reason: string,
+): Promise<CustomerWalletStatus> {
+  const body: WalletStatusReasonRequest = { reason };
+  return apiRequest<CustomerWalletStatus>(
+    `/api/v1/admin/customers/${encodeURIComponent(customerId)}/${action}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/**
+ * ADMIN freezes the customer's wallet and its ledger account in one transaction (doc 02 §2.7; doc
+ * 06 MVP-ADR-10). `200 {status}`. Freezing a `FROZEN` wallet is also `200` and changes nothing,
+ * so the response cannot say whether this call changed the wallet. The identical `404` for an
+ * unknown customer and one without a wallet; `400 VALIDATION_ERROR` naming `reason` (or
+ * `customerId` for an id that is not a UUID). The reason is sent as typed and audited; the
+ * customer's email never contains it.
+ */
+export function freezeCustomerWallet(
+  customerId: string,
+  reason: string,
+): Promise<CustomerWalletStatus> {
+  return changeWalletStatus(customerId, 'freeze', reason);
+}
+
+/** ADMIN unfreezes: the only way back to `ACTIVE`. Otherwise as freezeCustomerWallet. */
+export function unfreezeCustomerWallet(
+  customerId: string,
+  reason: string,
+): Promise<CustomerWalletStatus> {
+  return changeWalletStatus(customerId, 'unfreeze', reason);
 }
