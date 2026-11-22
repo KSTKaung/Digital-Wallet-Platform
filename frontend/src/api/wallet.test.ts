@@ -5,7 +5,7 @@ import { ApiError } from './client';
 import { deposit, freezeWallet, getLimits, moneyJson, withdraw } from './wallet';
 
 const TOKEN = makeJwt({ sub: 'cust-1', roles: ['CUSTOMER'], sid: 's-1' });
-const KEY = '0b7c6a52-3f1d-4c2e-9a8b-1d2e3f4a5b6c';
+const IDEM_UUID = '0b7c6a52-3f1d-4c2e-9a8b-1d2e3f4a5b6c';
 const MOVEMENT = {
   id: 'a7d1c0de-0000-4000-8000-000000000001',
   walletNumber: '12345678903',
@@ -80,10 +80,10 @@ describe('wallet API', () => {
     });
 
     await expect(
-      deposit({ amount: '150.50', currency: 'THB', reference: 'Rent share' }, KEY),
+      deposit({ amount: '150.50', currency: 'THB', reference: 'Rent share' }, IDEM_UUID),
     ).resolves.toEqual(MOVEMENT);
     const [call] = http.calls;
-    expect(call!.headers.get('Idempotency-Key')).toBe(KEY);
+    expect(call!.headers.get('Idempotency-Key')).toBe(IDEM_UUID);
     expect(call!.headers.get('Content-Type')).toBe('application/json');
     expect(call!.headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
     expect(call!.body).toBe('{"amount":150.50,"currency":"THB","reference":"Rent share"}');
@@ -93,7 +93,7 @@ describe('wallet API', () => {
     setSession(TOKEN, 900);
     const http = stubFetch({ 'POST /api/v1/wallet/deposits': () => jsonResponse(201, MOVEMENT) });
 
-    await deposit({ amount: '100.00', currency: 'THB' }, KEY);
+    await deposit({ amount: '100.00', currency: 'THB' }, IDEM_UUID);
     expect(http.calls[0]!.body).toBe('{"amount":100.00,"currency":"THB"}');
   });
 
@@ -102,9 +102,9 @@ describe('wallet API', () => {
     const result = { ...MOVEMENT, reference: 'WDR-20261120-0001' };
     const http = stubFetch({ 'POST /api/v1/wallet/withdrawals': () => jsonResponse(201, result) });
 
-    await expect(withdraw({ amount: '0.30', currency: 'THB' }, KEY)).resolves.toEqual(result);
+    await expect(withdraw({ amount: '0.30', currency: 'THB' }, IDEM_UUID)).resolves.toEqual(result);
     const [call] = http.calls;
-    expect(call!.headers.get('Idempotency-Key')).toBe(KEY);
+    expect(call!.headers.get('Idempotency-Key')).toBe(IDEM_UUID);
     expect(call!.body).toBe('{"amount":0.30,"currency":"THB"}');
   });
 
@@ -119,10 +119,10 @@ describe('wallet API', () => {
       'POST /api/v1/auth/refresh': () => tokenResponse(fresh),
     });
 
-    await withdraw({ amount: '200.00', currency: 'THB' }, KEY);
+    await withdraw({ amount: '200.00', currency: 'THB' }, IDEM_UUID);
     const calls = http.callsTo('POST', '/api/v1/wallet/withdrawals');
     expect(calls).toHaveLength(2);
-    expect(calls[1]!.headers.get('Idempotency-Key')).toBe(KEY);
+    expect(calls[1]!.headers.get('Idempotency-Key')).toBe(IDEM_UUID);
     expect(calls[1]!.body).toBe(calls[0]!.body);
     expect(calls[1]!.headers.get('Authorization')).toBe(`Bearer ${fresh}`);
   });
@@ -136,7 +136,7 @@ describe('wallet API', () => {
     setSession(TOKEN, 900);
     stubFetch({ 'POST /api/v1/wallet/withdrawals': () => errorResponse(status, code) });
 
-    const failure = withdraw({ amount: '1.00', currency: 'THB' }, KEY);
+    const failure = withdraw({ amount: '1.00', currency: 'THB' }, IDEM_UUID);
     await expect(failure).rejects.toBeInstanceOf(ApiError);
     await expect(failure).rejects.toEqual(expect.objectContaining({ status, errorCode: code }));
   });
@@ -152,7 +152,7 @@ describe('wallet API', () => {
         ),
     });
 
-    await expect(deposit({ amount: '1.00', currency: 'THB' }, KEY)).rejects.toEqual(
+    await expect(deposit({ amount: '1.00', currency: 'THB' }, IDEM_UUID)).rejects.toEqual(
       expect.objectContaining({ status: 429, retryAfterSeconds: 12 }),
     );
   });

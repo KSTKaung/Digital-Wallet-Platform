@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 /**
@@ -21,20 +21,25 @@ export function usePageParam(): [number, (page: number) => void] {
  * refetch on focus, no background polling). The latest callback is used without re-subscribing.
  */
 export function useRefetchOnFocus(refetch: () => void, enabled = true) {
-  const latest = useRef(refetch);
+  const latest = useRef({ refetch, enabled });
 
-  useEffect(() => {
-    latest.current = refetch;
-  }, [refetch]);
+  // Updated in the commit (a layout effect), so the listener sees the current values as soon as
+  // they are rendered, never a passive effect later.
+  useLayoutEffect(() => {
+    latest.current = { refetch, enabled };
+  }, [refetch, enabled]);
 
+  // One listener for the component's lifetime; `enabled` is checked when the event fires, so
+  // whether a focus event counts never depends on when an effect re-subscribed.
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    const onFocus = () => latest.current();
+    const onFocus = () => {
+      if (latest.current.enabled) {
+        latest.current.refetch();
+      }
+    };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [enabled]);
+  }, []);
 }
 
 /** A read's state. `error` is the raw error, so a page can tell a `404` from anything else. */

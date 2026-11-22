@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { describeError, type DescribedError } from '../api/errorMessages';
 
 /**
  * Error summary for a failed request: announced (role="alert") and focused when it appears or
  * changes, with the correlation id as a reference for support (doc 02 §1.7). It refocuses when the
- * `error` object changes, so pass a stable object (state, a constant, or LoadErrorNotice), never
+ * `error` object changes (a layout effect: in the same commit that renders the notice, so it is
+ * never shown unfocused), so pass a stable object (state, a constant, or LoadErrorNotice), never
  * one built during render, or every re-render steals the focus.
  */
 export function ErrorNotice({ error, children }: { error: DescribedError; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     ref.current?.focus();
   }, [error]);
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 /**
  * Runs one async action at a time. The ref guard refuses a second call before React has
@@ -27,12 +27,13 @@ export function useSubmitGuard() {
 
 /**
  * After a failed client-side check, moves focus to the first invalid field in the form. Call the
- * returned function after setting the field errors; focus moves once React has rendered them.
+ * returned function after setting the field errors; focus moves in the commit that renders them
+ * (a layout effect, so the field is never shown unfocused and tests see the focus with the DOM).
  */
 export function useFocusFirstInvalid(formRef: RefObject<HTMLFormElement | null>) {
   const [request, setRequest] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (request > 0) {
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
     }
@@ -41,9 +42,12 @@ export function useFocusFirstInvalid(formRef: RefObject<HTMLFormElement | null>)
   return useCallback(() => setRequest((n) => n + 1), []);
 }
 
-/** Moves focus to an element (e.g. a result heading) whenever `key` changes to a truthy value. */
+/**
+ * Moves focus to an element (e.g. a result heading) whenever `key` changes to a truthy value, in
+ * the same commit that renders it (a layout effect).
+ */
 export function useFocusOn(ref: RefObject<HTMLElement | null>, key: unknown) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (key) {
       ref.current?.focus();
     }

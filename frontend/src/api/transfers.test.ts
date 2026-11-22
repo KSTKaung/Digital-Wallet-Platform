@@ -22,7 +22,7 @@ import {
 import { lookupWallet } from './wallet';
 
 const TOKEN = makeJwt({ sub: 'cust-1', roles: ['CUSTOMER'], sid: 's-1' });
-const KEY = '0b7c6a52-3f1d-4c2e-9a8b-1d2e3f4a5b6c';
+const IDEM_UUID = '0b7c6a52-3f1d-4c2e-9a8b-1d2e3f4a5b6c';
 
 describe('pageQueryString', () => {
   it('writes the 0-based page and the size, 20 by default', () => {
@@ -80,11 +80,11 @@ describe('createTransfer', () => {
     await expect(
       createTransfer(
         { receiverWalletNumber: RECIPIENT_NUMBER, amount: '1500.00', currency: 'THB' },
-        KEY,
+        IDEM_UUID,
       ),
     ).resolves.toEqual(COMPLETED_TRANSFER);
     const [call] = http.calls;
-    expect(call!.headers.get('Idempotency-Key')).toBe(KEY);
+    expect(call!.headers.get('Idempotency-Key')).toBe(IDEM_UUID);
     expect(call!.headers.get('Content-Type')).toBe('application/json');
     expect(call!.headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
     expect(call!.body).toBe(
@@ -100,7 +100,7 @@ describe('createTransfer', () => {
 
     await createTransfer(
       { receiverWalletNumber: RECIPIENT_NUMBER, amount: '0.30', currency: 'THB', description: '' },
-      KEY,
+      IDEM_UUID,
     );
     expect(http.calls[0]!.body).toBe(
       `{"amount":0.30,"receiverWalletNumber":"${RECIPIENT_NUMBER}","currency":"THB"}`,
@@ -121,7 +121,7 @@ describe('createTransfer', () => {
         currency: 'THB',
         description: '  Lunch \u{1F1F9}\u{1F1ED} ',
       },
-      KEY,
+      IDEM_UUID,
     );
     const body = http.calls[0]!.body!;
     expect(body.startsWith('{"amount":12.50,')).toBe(true);
@@ -138,7 +138,7 @@ describe('createTransfer', () => {
     expect(() =>
       createTransfer(
         { receiverWalletNumber: RECIPIENT_NUMBER, amount: '1e3', currency: 'THB' },
-        KEY,
+        IDEM_UUID,
       ),
     ).toThrow('amount must be plain decimal text');
     expect(http.calls).toHaveLength(0);
@@ -151,7 +151,7 @@ describe('createTransfer', () => {
     await expect(
       createTransfer(
         { receiverWalletNumber: RECIPIENT_NUMBER, amount: '1.00', currency: 'THB' },
-        KEY,
+        IDEM_UUID,
       ),
     ).rejects.toMatchObject({ status: 403, errorCode: 'RISK_BLOCKED' });
   });

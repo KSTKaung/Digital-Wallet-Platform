@@ -103,7 +103,7 @@ describe('apiRequest', () => {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const OLD = makeJwt({ sub: 'u-1', roles: ['CUSTOMER'], sid: 'old' });
 const NEW = makeJwt({ sub: 'u-1', roles: ['CUSTOMER'], sid: 'new' });
-const KEY = '7f1c2a9e-1b2c-4d3e-8f40-123456789abc';
+const IDEM_UUID = '7f1c2a9e-1b2c-4d3e-8f40-123456789abc';
 
 function bearerOf(request: RecordedRequest | undefined) {
   return request?.headers.get('Authorization');
@@ -219,14 +219,14 @@ describe('apiRequest session handling', () => {
     const body = JSON.stringify({ amount: 100.5, currency: 'THB' });
 
     await expect(
-      apiRequest('/api/v1/wallet/deposits', { method: 'POST', body, idempotencyKey: KEY }),
+      apiRequest('/api/v1/wallet/deposits', { method: 'POST', body, idempotencyKey: IDEM_UUID }),
     ).resolves.toEqual({ status: 'COMPLETED', ledgerStatus: 'POSTED' });
 
     const [first, retry] = http.callsTo('POST', '/api/v1/wallet/deposits');
     expect(bearerOf(first)).toBe(`Bearer ${OLD}`);
     expect(bearerOf(retry)).toBe(`Bearer ${NEW}`);
     for (const call of [first, retry]) {
-      expect(call?.headers.get('Idempotency-Key')).toBe(KEY);
+      expect(call?.headers.get('Idempotency-Key')).toBe(IDEM_UUID);
       expect(call?.headers.get('Content-Type')).toBe('application/json');
       expect(call?.body).toBe(body);
     }
@@ -245,14 +245,14 @@ describe('apiRequest session handling', () => {
     const error = await apiRequest('/api/v1/wallet/deposits', {
       method: 'POST',
       body: '{}',
-      idempotencyKey: KEY,
+      idempotencyKey: IDEM_UUID,
     }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ status: 401, message: 'First' });
     const posts = http.callsTo('POST', '/api/v1/wallet/deposits');
     expect(posts).toHaveLength(1);
-    expect(posts[0]?.headers.get('Idempotency-Key')).toBe(KEY);
+    expect(posts[0]?.headers.get('Idempotency-Key')).toBe(IDEM_UUID);
     expect(bearerOf(posts[0])).toBe(`Bearer ${OLD}`);
     expect(getAccessToken()).toBeNull();
     expect(ended).toHaveBeenCalledWith('sessionEnded');
