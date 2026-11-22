@@ -3,14 +3,24 @@ import { useSearchParams } from 'react-router';
 
 /**
  * The 1-based page number of a list from `?page=` (not sensitive, so it may live in the URL); 1
- * when it is missing or not a positive whole number. Page 1 has no parameter.
+ * when it is missing or not a positive whole number. Page 1 has no parameter. Other query
+ * parameters (e.g. a list filter) are kept when the page changes.
  */
 export function usePageParam(): [number, (page: number) => void] {
   const [params, setParams] = useSearchParams();
   const raw = Number(params.get('page'));
   const page = Number.isSafeInteger(raw) && raw >= 1 ? raw : 1;
   const setPage = useCallback(
-    (next: number) => setParams(next <= 1 ? {} : { page: String(next) }),
+    (next: number) =>
+      setParams((current) => {
+        const updated = new URLSearchParams(current);
+        if (next <= 1) {
+          updated.delete('page');
+        } else {
+          updated.set('page', String(next));
+        }
+        return updated;
+      }),
     [setParams],
   );
   return [page, setPage];

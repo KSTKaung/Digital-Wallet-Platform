@@ -9,7 +9,7 @@ import {
   useAuth,
   type LoginLocationState,
 } from '../../auth/authContext';
-import { safeRedirectPath } from '../../auth/redirect';
+import { afterLoginPath } from '../../auth/redirect';
 import { ErrorNotice, InfoNotice } from '../../components/ErrorNotice';
 import { useFocusFirstInvalid, useSubmitGuard } from '../../components/formHooks';
 import { PasswordField } from '../../components/PasswordField';
@@ -30,7 +30,8 @@ function readLoginState(state: unknown): LoginLocationState {
 /**
  * Sign in (doc 05 §5.1 step 3). Every failed sign-in is the same 401 (wrong password, unknown or
  * locked account, MVP-ADR-23), so the page shows one generic message and never says which.
- * After success it returns to `from` only if that is a safe in-app path.
+ * After success it returns to `from` only if that is a safe in-app path for this kind of account;
+ * otherwise staff land on /admin and customers on the dashboard (afterLoginPath).
  */
 export function LoginPage() {
   const { status, login } = useAuth();
@@ -65,9 +66,9 @@ export function LoginPage() {
         return;
       }
       try {
-        await login({ email: email.trim(), password });
+        const user = await login({ email: email.trim(), password });
         setPassword('');
-        navigate(safeRedirectPath(routerState.from), { replace: true });
+        navigate(afterLoginPath(routerState.from, user.roles), { replace: true });
       } catch (caught) {
         setPassword('');
         setError(describeError(caught, { UNAUTHORIZED: LOGIN_FAILED_MESSAGE }));

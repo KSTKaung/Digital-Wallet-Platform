@@ -62,6 +62,18 @@ const MESSAGES: Readonly<Record<string, string>> = {
     'This transfer can no longer be cancelled: it has already been decided or has expired.',
 };
 
+/**
+ * Staff screens (doc 02 §2.7) pass these as overrides: the customer texts above talk about "your"
+ * application or account. INVALID_KYC_STATE on a decision means another officer (or an earlier
+ * decision) got there first; FORBIDDEN is the staff role, or a reviewer deciding their own
+ * application. The customer texts stay unchanged.
+ */
+export const STAFF_ERROR_OVERRIDES: ErrorOverrides = {
+  INVALID_KYC_STATE:
+    'This application is no longer pending review: another officer or an earlier decision has already decided it. The latest details are shown.',
+  FORBIDDEN: 'Your staff role does not allow this action.',
+};
+
 /** Codes whose text gets "Please wait N seconds" when the server sent Retry-After. */
 const WAIT_CODES: ReadonlySet<string> = new Set([
   'RATE_LIMITED',
@@ -91,6 +103,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   walletNumber: 'Wallet number',
   receiverWalletNumber: 'Wallet number',
   description: 'Description',
+  reason: 'Reason',
 };
 
 export function describeError(error: unknown, overrides: ErrorOverrides = {}): DescribedError {

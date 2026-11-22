@@ -6,6 +6,7 @@ import {
   validationErrorField,
   LOGIN_FAILED_MESSAGE,
   NETWORK_ERROR_MESSAGE,
+  STAFF_ERROR_OVERRIDES,
   waitText,
 } from './errorMessages';
 import { ApiError } from './http';
@@ -184,5 +185,34 @@ describe('KYC helpers', () => {
       'You already have an active KYC application.',
     );
     expect(describeError(err(409, 'INVALID_KYC_STATE')).message).toMatch(/current state/);
+  });
+});
+
+describe('staff wording', () => {
+  it('overrides INVALID_KYC_STATE and FORBIDDEN for staff screens, leaving the customer texts', () => {
+    expect(describeError(err(409, 'INVALID_KYC_STATE'), STAFF_ERROR_OVERRIDES).message).toBe(
+      'This application is no longer pending review: another officer or an earlier decision has already decided it. The latest details are shown.',
+    );
+    expect(describeError(err(403, 'FORBIDDEN'), STAFF_ERROR_OVERRIDES).message).toBe(
+      'Your staff role does not allow this action.',
+    );
+    expect(describeError(err(409, 'INVALID_KYC_STATE')).message).toBe(
+      'This is not possible while your KYC application is in its current state.',
+    );
+    expect(describeError(err(403, 'FORBIDDEN')).message).toBe(
+      'This action is not available for your account.',
+    );
+  });
+
+  it('labels the reason field and never echoes a value', () => {
+    expect(
+      describeError(
+        err(400, 'VALIDATION_ERROR', 'reason: must not contain the document reference'),
+        STAFF_ERROR_OVERRIDES,
+      ).message,
+    ).toBe('Reason must not contain the document reference.');
+    expect(validationErrorField(err(400, 'VALIDATION_ERROR', 'reason: must not be blank'))).toBe(
+      'reason',
+    );
   });
 });
