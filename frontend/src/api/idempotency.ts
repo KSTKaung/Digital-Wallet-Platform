@@ -1,10 +1,17 @@
-// One Idempotency-Key per money confirm step (doc 02 §1.4, §7 item 3; documentations/08 §4D.6).
+// Idempotency-Key lifecycle for money confirm steps (doc 02 §1.4, §7 item 3; documentations/08
+// §4D.6).
 //
-// The key is created when the confirm step mounts and is reused for retries and double clicks,
-// so the server executes the movement at most once. Renew it after a terminal answer: a success,
-// a stored refusal (the server replays it for the same key), a key bound to another request, or
-// when the inputs change. Errors that leave no record (validation, KYC_REQUIRED, 429, 5xx,
-// network) keep the key, so a retry stays safe.
+// The page holds one key bound to the draft it was created for (exactly what the request sends:
+// deposit amount + note, withdrawal amount, transfer receiver wallet number + amount +
+// description). The key is chosen when a confirm step opens: the held key when the draft is
+// exactly the same as before, otherwise a new one. It is reused for retries and double clicks,
+// and also after Edit / Change recipient when the customer comes back with the same draft, so an
+// unknown outcome (network error, 5xx) followed by a second confirm is replayed by the server,
+// never executed twice. Renew it after a terminal answer: a success, a stored refusal (the server
+// replays it for the same key) or a key bound to another request; the next attempt, even with
+// the same draft, then gets a new key. Errors that leave no record (validation, KYC_REQUIRED,
+// 429) and unknown outcomes keep the key. The key lives in page state only: leaving the page
+// forgets it.
 
 import { useCallback, useState } from 'react';
 import { ApiError } from './client';
@@ -38,15 +45,41 @@ export function isKeySpentError(error: unknown): boolean {
   return error instanceof ApiError && KEY_SPENT_CODES.has(error.errorCode);
 }
 
-export interface IdempotencyKeyHandle {
-  /** The key to send; stable across re-renders until renew() is called. */
-  key: string;
-  /** Replace the key (after a terminal response or when the inputs change). */
+/**
+ * True when the outcome of a money POST is unknown: no API answer (network error, a body that is
+ * not the documented JSON) or a 5xx. The movement may have happened; the key is kept, and the
+ * customer is told to check their history before trying again.
+ */
+export function isUnknownOutcome(error: unknown): boolean {
+  return !(error instanceof ApiError) || error.status >= 500;
+}
+
+/** A draft's identity for key reuse: the exact values the request sends, in a fixed order. */
+export function draftFingerprint(...values: readonly (string | undefined)[]): string {
+  return JSON.stringify(values.map((value) => value ?? null));
+}
+
+export interface DraftKeyHandle {
+  /** The key for the draft last opened (stable across re-renders), or null before the first. */
+  key: string | null;
+  /**
+   * Call when a confirm step opens for a draft (see draftFingerprint). Keeps the held key when
+   * the draft is exactly the one it was created for, otherwise creates a new key.
+   */
+  open: (fingerprint: string) => void;
+  /** After a terminal answer: replaces the key, so the next attempt never reuses it. */
   renew: () => void;
 }
 
-export function useIdempotencyKey(): IdempotencyKeyHandle {
-  const [key, setKey] = useState(newIdempotencyKey);
-  const renew = useCallback(() => setKey(newIdempotencyKey()), []);
-  return { key, renew };
+export function useDraftIdempotencyKey(): DraftKeyHandle {
+  const [held, setHeld] = useState<{ fingerprint: string; key: string } | null>(null);
+  const open = useCallback((fingerprint: string) => {
+    setHeld((prev) =>
+      prev?.fingerprint === fingerprint ? prev : { fingerprint, key: newIdempotencyKey() },
+    );
+  }, []);
+  const renew = useCallback(() => {
+    setHeld((prev) => (prev === null ? null : { ...prev, key: newIdempotencyKey() }));
+  }, []);
+  return { key: held?.key ?? null, open, renew };
 }

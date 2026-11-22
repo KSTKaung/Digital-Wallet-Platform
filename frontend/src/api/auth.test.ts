@@ -179,7 +179,7 @@ describe('logout', () => {
     setSession(TOKEN, 900);
     const http = stubFetch({ 'POST /api/v1/auth/logout': () => emptyResponse(204) });
 
-    await logout();
+    await expect(logout()).resolves.toBe(true);
 
     const [call] = http.calls;
     expect(call?.headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
@@ -197,7 +197,7 @@ describe('logout', () => {
       'POST /api/v1/auth/logout': () => emptyResponse(204),
     });
 
-    await logout();
+    await expect(logout()).resolves.toBe(true);
 
     expect(http.calls.map((c) => c.path)).toEqual(['/api/v1/auth/refresh', '/api/v1/auth/logout']);
     expect(http.calls[1]?.headers.get('Authorization')).toBe(`Bearer ${NEW}`);
@@ -220,10 +220,11 @@ describe('logout', () => {
       'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
     });
 
-    await logout();
+    await expect(logout()).resolves.toBe(true);
 
     expect(http.callsTo('POST', '/api/v1/auth/logout')).toHaveLength(0);
     expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('loggedOut');
   });
 
   it('a logout 401 is followed by one refresh and one more logout, so the cookie is cleared', async () => {
@@ -236,7 +237,7 @@ describe('logout', () => {
       'POST /api/v1/auth/refresh': () => tokenResponse(NEW),
     });
 
-    await logout();
+    await expect(logout()).resolves.toBe(true);
 
     expect(http.calls.map((c) => c.path)).toEqual([
       '/api/v1/auth/logout',
@@ -254,8 +255,9 @@ describe('logout', () => {
       },
     });
 
-    await expect(logout()).resolves.toBeUndefined();
+    await expect(logout()).resolves.toBe(false);
     expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('logoutUnconfirmed');
   });
 
   it('clears local state when the server fails with 500', async () => {
@@ -264,10 +266,83 @@ describe('logout', () => {
       'POST /api/v1/auth/logout': () => errorResponse(500, 'SYSTEM_ERROR'),
     });
 
-    await logout();
+    await expect(logout()).resolves.toBe(false);
 
     expect(http.calls).toHaveLength(1);
     expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('logoutUnconfirmed');
+  });
+
+  it('is unconfirmed when the server answers 429', async () => {
+    setSession(TOKEN, 900);
+    stubFetch({
+      'POST /api/v1/auth/logout': () =>
+        jsonResponse(
+          429,
+          { success: false, errorCode: 'RATE_LIMITED', message: 'Slow down' },
+          { 'Retry-After': '5' },
+        ),
+    });
+
+    await expect(logout()).resolves.toBe(false);
+    expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('logoutUnconfirmed');
+  });
+
+  it.each([
+    ['a network error', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['500', () => Promise.resolve(errorResponse(500, 'SYSTEM_ERROR'))],
+    ['429', () => Promise.resolve(errorResponse(429, 'RATE_LIMITED'))],
+  ])('is unconfirmed when the refresh before logout fails with %s', async (_name, refresh) => {
+    const http = stubFetch({
+      'POST /api/v1/auth/refresh': refresh,
+      'POST /api/v1/auth/logout': () => emptyResponse(204),
+    });
+
+    await expect(logout()).resolves.toBe(false);
+    expect(http.callsTo('POST', '/api/v1/auth/logout')).toHaveLength(0);
+    expect(getSessionEndReason()).toBe('logoutUnconfirmed');
+  });
+
+  it('is confirmed when the refresh after a logout 401 says the session is gone', async () => {
+    setSession(TOKEN, 900);
+    const http = stubFetch({
+      'POST /api/v1/auth/logout': () => errorResponse(401, 'UNAUTHORIZED'),
+      'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
+    });
+
+    await expect(logout()).resolves.toBe(true);
+    expect(http.callsTo('POST', '/api/v1/auth/logout')).toHaveLength(1);
+    expect(getSessionEndReason()).toBe('loggedOut');
+  });
+
+  it('is unconfirmed when the logout after the refresh fails again', async () => {
+    setSession(TOKEN, 900);
+    const http = stubFetch({
+      'POST /api/v1/auth/logout': [
+        () => errorResponse(401, 'UNAUTHORIZED'),
+        () => errorResponse(401, 'UNAUTHORIZED'),
+      ],
+      'POST /api/v1/auth/refresh': () => tokenResponse(NEW),
+    });
+
+    await expect(logout()).resolves.toBe(false);
+    expect(http.callsTo('POST', '/api/v1/auth/logout')).toHaveLength(2);
+    expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('logoutUnconfirmed');
+  });
+
+  it('is unconfirmed when a refresh answers 200 without a usable token (the cookie was rotated)', async () => {
+    setSession(TOKEN, 900);
+    const http = stubFetch({
+      'POST /api/v1/auth/logout': () => errorResponse(401, 'UNAUTHORIZED'),
+      'POST /api/v1/auth/refresh': () => jsonResponse(200, { expiresIn: 900 }),
+    });
+
+    await expect(logout()).resolves.toBe(false);
+    expect(http.callsTo('POST', '/api/v1/auth/logout')).toHaveLength(1);
+    expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('logoutUnconfirmed');
   });
 
   it('does not emit the session-ended event (a chosen sign-out)', async () => {

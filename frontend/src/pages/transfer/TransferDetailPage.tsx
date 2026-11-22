@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 import { Link, useParams } from 'react-router';
 import { ApiError } from '../../api/client';
-import { describeError } from '../../api/errorMessages';
+import type { DescribedError } from '../../api/errorMessages';
 import { getTransfer } from '../../api/transfers';
 import { BangkokTime } from '../../components/BangkokTime';
 import { useLoad } from '../../components/dataHooks';
-import { ErrorNotice } from '../../components/ErrorNotice';
+import { ErrorNotice, LoadErrorNotice } from '../../components/ErrorNotice';
 import { RefreshFailed } from '../../components/RefreshFailed';
 import { LINK_CLASSES, SECONDARY_BUTTON_CLASSES } from '../../components/SubmitButton';
 import { SIMULATED_MONEY_NOTE } from '../wallet/walletText';
@@ -35,6 +35,9 @@ export function TransferDetailPage() {
   );
 }
 
+/** Stable, so ErrorNotice does not refocus on every re-render. */
+const NOT_FOUND_ERROR: DescribedError = { message: TRANSFER_NOT_FOUND_MESSAGE };
+
 /** A `404`, or a `400` for an id that is not a transfer id: the same "not found". */
 function isNotFound(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 404 || error.status === 400);
@@ -53,14 +56,14 @@ function TransferDetail({ id }: { id: string }) {
   }
   if (load.kind === 'error') {
     if (isNotFound(load.error)) {
-      return <ErrorNotice error={{ message: TRANSFER_NOT_FOUND_MESSAGE }} />;
+      return <ErrorNotice error={NOT_FOUND_ERROR} />;
     }
     return (
-      <ErrorNotice error={describeError(load.error)}>
+      <LoadErrorNotice error={load.error}>
         <button type="button" onClick={retry} className={`${SECONDARY_BUTTON_CLASSES} mt-2`}>
           Try again
         </button>
-      </ErrorNotice>
+      </LoadErrorNotice>
     );
   }
 

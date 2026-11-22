@@ -141,6 +141,21 @@ describe('Transaction history', () => {
     expect(await screen.findByText('+1,000.00 THB')).toBeInTheDocument();
   });
 
+  it('a re-render with the same load error does not take the focus back', async () => {
+    setup({ [`GET ${HISTORY}`]: () => errorResponse(500, 'SYSTEM_ERROR') });
+    const router = renderRoute('/transactions');
+
+    expect(await screen.findByRole('alert')).toHaveFocus();
+    const home = screen.getByRole('link', { name: 'Home' });
+    home.focus();
+    await act(async () => {
+      await router.navigate('/transactions', { state: { rerender: 1 } });
+    });
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(home).toHaveFocus();
+  });
+
   it('refreshes on the button and on focus; a failed refresh keeps the rows', async () => {
     const user = userEvent.setup();
     const http = setup({

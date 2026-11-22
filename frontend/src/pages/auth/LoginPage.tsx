@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { describeError, LOGIN_FAILED_MESSAGE, type DescribedError } from '../../api/errorMessages';
 import {
   LOGIN_NOTICE_MESSAGES,
+  LOGOUT_UNCONFIRMED_GUIDANCE,
+  LOGOUT_UNCONFIRMED_MESSAGE,
   SESSION_ENDED_MESSAGE,
   useAuth,
   type LoginLocationState,
@@ -17,6 +19,9 @@ import { AuthPage, FORM_CLASSES } from './AuthPage';
 import { collectErrors, EMAIL_MAX_LENGTH, emailError, requiredError } from './validation';
 
 type Field = 'email' | 'password';
+
+/** Stable, so ErrorNotice focuses it once when /login opens, not on every render. */
+const LOGOUT_UNCONFIRMED: DescribedError = { message: LOGOUT_UNCONFIRMED_MESSAGE };
 
 function readLoginState(state: unknown): LoginLocationState {
   return typeof state === 'object' && state !== null ? (state as LoginLocationState) : {};
@@ -86,6 +91,11 @@ export function LoginPage() {
 
   return (
     <AuthPage id="login" title="Sign in">
+      {routerState.logoutUnconfirmed && (
+        <ErrorNotice error={LOGOUT_UNCONFIRMED}>
+          <p className="text-sm">{LOGOUT_UNCONFIRMED_GUIDANCE}</p>
+        </ErrorNotice>
+      )}
       {notice && <InfoNotice>{notice}</InfoNotice>}
       {error && <ErrorNotice error={error} />}
       <form ref={formRef} noValidate onSubmit={onSubmit} className={FORM_CLASSES}>

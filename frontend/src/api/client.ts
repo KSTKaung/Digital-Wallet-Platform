@@ -9,9 +9,13 @@
 //   retried money POST is replayed by the server, never executed twice. A second 401, or a
 //   refused refresh, ends the session. Public auth endpoints, logout and change-password never
 //   refresh (a change-password 401 means a wrong current password).
+// - The retry is sent only for the same user: if the token after the refresh (or the one another
+//   caller stored) has a different `sub` than the token the request was sent with (another tab
+//   signed out and someone else signed in, so the shared cookie now belongs to them), the request
+//   is not retried, the session ends and the original error is thrown.
 
 import { refreshAccessToken } from '../auth/refresh';
-import { clearSession, endSession, getAccessToken } from '../auth/tokenStore';
+import { clearSession, decodeJwtClaims, endSession, getAccessToken } from '../auth/tokenStore';
 import { CORRELATION_ID_HEADER, newUuid, readBody, toApiError, apiBaseUrl } from './http';
 
 export { ApiError, apiBaseUrl } from './http';
@@ -95,6 +99,11 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
       signOutAfter401(sentToken);
       throw firstError;
     }
+    if (sentToken !== null && subjectOf(token) !== subjectOf(sentToken)) {
+      // Never replay this user's request (possibly a money POST) as somebody else.
+      endSession();
+      throw firstError;
+    }
     response = await send(token);
     if (response.status === 401) {
       const secondError = await toApiError(response);
@@ -120,6 +129,11 @@ async function tokenAfter401(sentToken: string | null): Promise<string | null> {
   }
   const outcome = await refreshAccessToken();
   return outcome === 'refreshed' ? getAccessToken() : null;
+}
+
+/** The JWT `sub`, or null for a token that cannot be decoded. */
+function subjectOf(token: string): string | null {
+  return decodeJwtClaims(token)?.sub ?? null;
 }
 
 /** Only a tab that had a session hears "session ended"; a tab that never signed in just clears. */

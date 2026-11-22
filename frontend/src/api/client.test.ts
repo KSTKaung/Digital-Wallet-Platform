@@ -233,6 +233,63 @@ describe('apiRequest session handling', () => {
     expect(retry?.headers.get('X-Correlation-Id')).toBe(first?.headers.get('X-Correlation-Id'));
   });
 
+  it('does not retry a money POST when the refresh answers for another user', async () => {
+    const ended = vi.fn();
+    onSessionEnded(ended);
+    const other = makeJwt({ sub: 'u-2', roles: ['CUSTOMER'] });
+    const http = stubFetch({
+      'POST /api/v1/wallet/deposits': () => errorResponse(401, 'UNAUTHORIZED', 'First'),
+      'POST /api/v1/auth/refresh': () => tokenResponse(other),
+    });
+
+    const error = await apiRequest('/api/v1/wallet/deposits', {
+      method: 'POST',
+      body: '{}',
+      idempotencyKey: KEY,
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 401, message: 'First' });
+    const posts = http.callsTo('POST', '/api/v1/wallet/deposits');
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.headers.get('Idempotency-Key')).toBe(KEY);
+    expect(bearerOf(posts[0])).toBe(`Bearer ${OLD}`);
+    expect(getAccessToken()).toBeNull();
+    expect(ended).toHaveBeenCalledWith('sessionEnded');
+  });
+
+  it('does not retry with a token another caller stored for another user', async () => {
+    const ended = vi.fn();
+    onSessionEnded(ended);
+    const other = makeJwt({ sub: 'u-2', roles: ['CUSTOMER'] });
+    const http = stubFetch({
+      'GET /api/v1/wallet': () => {
+        setSession(other, 900);
+        return errorResponse(401, 'UNAUTHORIZED');
+      },
+    });
+
+    await expect(apiRequest('/api/v1/wallet')).rejects.toMatchObject({ status: 401 });
+
+    expect(http.calls).toHaveLength(1);
+    expect(getAccessToken()).toBeNull();
+    expect(ended).toHaveBeenCalledTimes(1);
+  });
+
+  it('a request sent without a token still retries after a refresh (any user)', async () => {
+    clearSession();
+    const http = stubFetch({
+      'GET /api/v1/wallet': [
+        () => errorResponse(401, 'UNAUTHORIZED'),
+        () => jsonResponse(200, { ok: true }),
+      ],
+      'POST /api/v1/auth/refresh': () => tokenResponse(makeJwt({ sub: 'u-9' })),
+    });
+
+    await expect(apiRequest('/api/v1/wallet')).resolves.toEqual({ ok: true });
+    expect(http.callsTo('GET', '/api/v1/wallet')).toHaveLength(2);
+  });
+
   it('a second 401 after the retry ends the session and throws the ApiError', async () => {
     const ended = vi.fn();
     onSessionEnded(ended);

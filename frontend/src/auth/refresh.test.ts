@@ -9,8 +9,14 @@ import {
   stubFetch,
   tokenResponse,
 } from '../test/http';
-import { REFRESH_LOCK_NAME, refreshAccessToken } from './refresh';
-import { getAccessToken, getSessionSnapshot, setSession } from './tokenStore';
+import { REFRESH_LOCK_NAME, refreshAccessToken, UnusableRefreshResponseError } from './refresh';
+import {
+  clearSession,
+  getAccessToken,
+  getSessionEndReason,
+  getSessionSnapshot,
+  setSession,
+} from './tokenStore';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const cleanups: (() => void)[] = [];
@@ -105,7 +111,50 @@ describe('refreshAccessToken', () => {
     expect(getAccessToken()).toBeNull();
   });
 
-  it('resolves signedOut when the 200 body has no usable token', async () => {
+  it.each([401, 403])(
+    'keeps a session stored while the refresh was in flight when it answers %i',
+    async (status) => {
+      const gate = deferred<Response>();
+      stubFetch({ 'POST /api/v1/auth/refresh': () => gate.promise });
+
+      const pending = refreshAccessToken();
+      const signedIn = makeJwt({ sub: 'u-1' });
+      setSession(signedIn, 900);
+      gate.resolve(errorResponse(status, 'UNAUTHORIZED'));
+
+      await expect(pending).resolves.toBe('refreshed');
+      expect(getAccessToken()).toBe(signedIn);
+    },
+  );
+
+  it('keeps a session stored while the refresh was in flight when the body is unusable', async () => {
+    const gate = deferred<Response>();
+    stubFetch({ 'POST /api/v1/auth/refresh': () => gate.promise });
+
+    const pending = refreshAccessToken();
+    const signedIn = makeJwt({ sub: 'u-1' });
+    setSession(signedIn, 900);
+    gate.resolve(jsonResponse(200, { expiresIn: 900 }));
+
+    await expect(pending).resolves.toBe('refreshed');
+    expect(getAccessToken()).toBe(signedIn);
+  });
+
+  it('resolves signedOut without clearing again when the session was cleared meanwhile', async () => {
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+    const gate = deferred<Response>();
+    stubFetch({ 'POST /api/v1/auth/refresh': () => gate.promise });
+
+    const pending = refreshAccessToken();
+    clearSession('loggedOut');
+    gate.resolve(errorResponse(401, 'UNAUTHORIZED'));
+
+    await expect(pending).resolves.toBe('signedOut');
+    expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('loggedOut');
+  });
+
+  it('rejects and clears the local session when the 200 body has no usable token', async () => {
     stubFetch({
       'POST /api/v1/auth/refresh': [
         () => jsonResponse(200, { expiresIn: 900 }),
@@ -114,10 +163,38 @@ describe('refreshAccessToken', () => {
       ],
     });
 
-    await expect(refreshAccessToken()).resolves.toBe('signedOut');
-    await expect(refreshAccessToken()).resolves.toBe('signedOut');
-    await expect(refreshAccessToken()).resolves.toBe('signedOut');
-    expect(getSessionSnapshot()).toBeNull();
+    for (let i = 0; i < 3; i++) {
+      setSession(makeJwt({ sub: 'u-1' }), 900);
+      await expect(refreshAccessToken()).rejects.toBeInstanceOf(UnusableRefreshResponseError);
+      expect(getSessionSnapshot()).toBeNull();
+    }
+  });
+
+  it('does not let a late successful refresh replace a session signed in meanwhile', async () => {
+    const gate = deferred<Response>();
+    stubFetch({ 'POST /api/v1/auth/refresh': () => gate.promise });
+
+    const pending = refreshAccessToken();
+    const signedIn = makeJwt({ sub: 'user-y' });
+    setSession(signedIn, 900);
+    gate.resolve(tokenResponse(makeJwt({ sub: 'user-x' })));
+
+    await expect(pending).resolves.toBe('refreshed');
+    expect(getAccessToken()).toBe(signedIn);
+  });
+
+  it('does not store a late successful refresh after a sign-out meanwhile', async () => {
+    setSession(makeJwt({ sub: 'u-1' }), 900);
+    const gate = deferred<Response>();
+    stubFetch({ 'POST /api/v1/auth/refresh': () => gate.promise });
+
+    const pending = refreshAccessToken();
+    clearSession('loggedOut');
+    gate.resolve(tokenResponse(makeJwt({ sub: 'u-1' })));
+
+    await expect(pending).resolves.toBe('signedOut');
+    expect(getAccessToken()).toBeNull();
+    expect(getSessionEndReason()).toBe('loggedOut');
   });
 
   it('rejects on 429 with Retry-After and keeps the current session', async () => {

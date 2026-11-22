@@ -10,7 +10,10 @@ export interface AuthContextValue {
   /** Decoded from the JWT for the UI only; the server decides every permission. */
   user: SessionUser | null;
   login: (credentials: LoginRequest) => Promise<SessionUser>;
-  /** Ends the session (server and local) and goes to /login. Never throws. */
+  /**
+   * Ends the session (server and local) and goes to /login; when the server did not confirm it,
+   * /login shows the "could not be confirmed" alert. Never throws.
+   */
   logout: () => Promise<void>;
   hasRole: (role: Role) => boolean;
 }
@@ -22,6 +25,8 @@ export type LoginNotice = 'passwordChanged' | 'passwordReset';
 export interface LoginLocationState {
   /** The server ended the session: show "Your session has ended". */
   sessionEnded?: boolean;
+  /** Sign-out cleared this tab, but the server did not confirm it (the cookie may be valid). */
+  logoutUnconfirmed?: boolean;
   /** A completed flow (password changed or reset). */
   notice?: LoginNotice;
   /** Where to return after signing in; checked with safeRedirectPath before use. */
@@ -29,6 +34,13 @@ export interface LoginLocationState {
 }
 
 export const SESSION_ENDED_MESSAGE = 'Your session has ended. Please sign in again.';
+
+export const LOGOUT_UNCONFIRMED_MESSAGE =
+  'Sign-out could not be confirmed, so you may still be signed in on this browser.';
+
+/** How to "try again" once this tab is already signed out (the next load may restore the session). */
+export const LOGOUT_UNCONFIRMED_GUIDANCE =
+  'To try again, reload this page; if you are still signed in, choose Sign out.';
 
 export const LOGIN_NOTICE_MESSAGES: Readonly<Record<LoginNotice, string>> = {
   passwordChanged: 'Password changed. Sign in again.',
@@ -51,6 +63,8 @@ export function loginStateFor(
       return { sessionEnded: true, from };
     case 'loggedOut':
       return undefined;
+    case 'logoutUnconfirmed':
+      return { logoutUnconfirmed: true };
     default:
       return { from };
   }

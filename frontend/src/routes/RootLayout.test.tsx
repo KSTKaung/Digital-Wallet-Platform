@@ -116,5 +116,35 @@ describe('main navigation by session status', () => {
     expect(getAccessToken()).toBeNull();
     expect(nav().getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     expect(nav().queryByRole('button', { name: /Sign out/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not be confirmed/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a network error', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['500', () => Promise.resolve(errorResponse(500, 'SYSTEM_ERROR'))],
+    ['429', () => Promise.resolve(errorResponse(429, 'RATE_LIMITED'))],
+  ])('an unconfirmed sign-out (%s) shows an alert on /login', async (_name, answer) => {
+    setSession(CUSTOMER, 900);
+    const user = userEvent.setup();
+    const http = stubFetch({
+      'POST /api/v1/auth/logout': answer,
+      'GET /actuator/health': health,
+    });
+    const router = renderRoute('/');
+
+    await user.click(nav().getByRole('button', { name: 'Sign out' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Sign-out could not be confirmed, so you may still be signed in on this browser.',
+    );
+    expect(alert).toHaveTextContent(
+      'To try again, reload this page; if you are still signed in, choose Sign out.',
+    );
+    expect(alert).toHaveFocus();
+    expect(router.state.location.pathname).toBe('/login');
+    expect(getAccessToken()).toBeNull();
+    expect(nav().getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    expect(http.callsTo('POST', '/api/v1/auth/logout')).toHaveLength(1);
   });
 });

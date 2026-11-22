@@ -29,19 +29,26 @@ type Listener = () => void;
 /**
  * Why the last session ended, so every part of the app that sends the user to /login (the
  * AuthProvider listener and the RequireAuth guard) picks the same router state, whichever runs
- * first. `sessionEnded`: the server ended it (second 401, refused refresh). `passwordChanged`:
- * change-password ended every session. `loggedOut`: the user signed out.
+ * first. `sessionEnded`: the server ended it (second 401, refused refresh, or a refresh that
+ * answered for another user). `passwordChanged`: change-password ended every session.
+ * `loggedOut`: the user signed out and the server confirmed it. `logoutUnconfirmed`: the user
+ * signed out and local state is cleared, but the server did not confirm it, so the refresh
+ * cookie may still be valid.
  */
-export type SessionEndReason = 'sessionEnded' | 'passwordChanged' | 'loggedOut';
+export type SessionEndReason =
+  'sessionEnded' | 'passwordChanged' | 'loggedOut' | 'logoutUnconfirmed';
 
 /** The reasons that emit the session-ended event (a chosen sign-out does not). */
-export type EndedReason = Exclude<SessionEndReason, 'loggedOut'>;
+export type EndedReason = Exclude<SessionEndReason, 'loggedOut' | 'logoutUnconfirmed'>;
 
 type EndedListener = (reason: EndedReason) => void;
 
 let accessToken: string | null = null;
 let snapshot: SessionSnapshot | null = null;
 let endReason: SessionEndReason | null = null;
+// Bumped whenever a token is stored or the session is cleared, so an async caller can tell
+// whether the session it started with is still the current one (see refresh.ts).
+let generation = 0;
 const changeListeners = new Set<Listener>();
 const endedListeners = new Set<EndedListener>();
 
@@ -97,6 +104,7 @@ export function setSession(token: string, expiresInSeconds: number): SessionSnap
     Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1000 : 0;
   accessToken = token;
   snapshot = { user, expiresAt: Date.now() + lifetimeMs };
+  generation += 1;
   endReason = null;
   emit(changeListeners);
   return snapshot;
@@ -114,6 +122,7 @@ export function clearSession(reason: SessionEndReason | null = null): void {
   }
   accessToken = null;
   snapshot = null;
+  generation += 1;
   emit(changeListeners);
 }
 
@@ -137,6 +146,14 @@ export function getSessionEndReason(): SessionEndReason | null {
 /** Forgets the end reason once its notice has been shown and the user moved on. */
 export function acknowledgeSessionEnd(): void {
   endReason = null;
+}
+
+/**
+ * Changes whenever a token is stored or the session is cleared; two equal readings mean the
+ * session did not change in between.
+ */
+export function getSessionGeneration(): number {
+  return generation;
 }
 
 export function getAccessToken(): string | null {

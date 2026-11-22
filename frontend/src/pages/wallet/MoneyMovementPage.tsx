@@ -2,9 +2,14 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError } from '../../api/client';
 import { describeError, isKycRequired, type DescribedError } from '../../api/errorMessages';
-import { isKeySpentError, useIdempotencyKey } from '../../api/idempotency';
+import {
+  draftFingerprint,
+  isKeySpentError,
+  isUnknownOutcome,
+  useDraftIdempotencyKey,
+} from '../../api/idempotency';
 import { deposit, withdraw, type MoneyMovement } from '../../api/wallet';
-import { ErrorNotice } from '../../components/ErrorNotice';
+import { ErrorNotice, InfoNotice } from '../../components/ErrorNotice';
 import {
   useCountdown,
   useFocusFirstInvalid,
@@ -34,6 +39,10 @@ import {
 export type MovementKind = 'deposit' | 'withdrawal';
 
 export const FROZEN_HINT = 'Only our staff can unfreeze a wallet; contact support.';
+
+/** After a network error or a 5xx: the movement may have happened (the key is kept). */
+export const MOVEMENT_UNKNOWN_OUTCOME_MESSAGE =
+  'We could not confirm whether this went through. Check your transaction history before trying again. While you stay on this page, confirming the same details again is safe.';
 
 const TEXT: Readonly<
   Record<
@@ -81,11 +90,13 @@ type Step =
 /**
  * Simulated deposit or withdrawal (doc 02 §2.3; doc 06 MVP-ADR-13): form → confirm → result.
  * The browser checks the amount format only; minimum, limits and balance are the server's
- * (D8). The confirm step owns the Idempotency-Key (doc 02 §1.4, §7 rule 3).
+ * (D8). The page holds the Idempotency-Key bound to the draft (doc 02 §1.4, §7 rule 3; see
+ * api/idempotency.ts): coming back to confirm exactly the same draft reuses it.
  */
 export function MoneyMovementPage({ kind }: { kind: MovementKind }) {
   const text = TEXT[kind];
   const { load, reload, retry } = useWalletOverview();
+  const idempotency = useDraftIdempotencyKey();
   const [step, setStep] = useState<Step>({ kind: 'form' });
   const [amountInput, setAmountInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -146,13 +157,18 @@ export function MoneyMovementPage({ kind }: { kind: MovementKind }) {
               onAmount={setAmountInput}
               onNote={setNoteInput}
               focusHeading={moved}
-              onReview={(draft) => goTo({ kind: 'confirm', draft })}
+              onReview={(draft) => {
+                idempotency.open(draftFingerprint(kind, draft.amount, draft.reference));
+                goTo({ kind: 'confirm', draft });
+              }}
             />
           )}
-          {step.kind === 'confirm' && (
+          {step.kind === 'confirm' && idempotency.key !== null && (
             <ConfirmStep
               kind={kind}
               draft={step.draft}
+              idempotencyKey={idempotency.key}
+              onKeySpent={idempotency.renew}
               onEdit={() => goTo({ kind: 'form' })}
               onDone={(result) => {
                 goTo({ kind: 'done', result });
@@ -279,30 +295,37 @@ function FormStep({
 }
 
 /**
- * The confirm step. Its Idempotency-Key is created when it mounts and is sent on every attempt
- * from here: a double click is refused while a request is in flight, and a retry after a network
- * error, a 5xx or a 429 reuses the key, so the server runs the movement at most once. After a
- * stored refusal or IDEMPOTENCY_KEY_REUSED the key is renewed for the next attempt; "Edit"
- * unmounts the step, so the next confirm step gets a new key.
+ * The confirm step. It sends the page's key for this draft on every attempt: a double click is
+ * refused while a request is in flight, and a retry after a network error, a 5xx or a 429 reuses
+ * the key, so the server runs the movement at most once; so does coming back through "Edit" with
+ * the same draft. After a success, a stored refusal or IDEMPOTENCY_KEY_REUSED the page renews
+ * the key (onKeySpent) for the next attempt.
  */
 function ConfirmStep({
   kind,
   draft,
+  idempotencyKey,
+  onKeySpent,
   onEdit,
   onDone,
   onWalletChanged,
 }: {
   kind: MovementKind;
   draft: Draft;
+  idempotencyKey: string;
+  onKeySpent: () => void;
   onEdit: () => void;
   onDone: (result: MoneyMovement) => void;
   onWalletChanged: () => void;
 }) {
   const text = TEXT[kind];
-  const { key, renew } = useIdempotencyKey();
   const { busy, run } = useSubmitGuard();
   const { seconds: waitSeconds, start: startWait } = useCountdown(0);
-  const [error, setError] = useState<{ described: DescribedError; code?: string } | null>(null);
+  const [error, setError] = useState<{
+    described: DescribedError;
+    code?: string;
+    unknownOutcome: boolean;
+  } | null>(null);
   const [kycRequired, setKycRequired] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   useFocusOn(headingRef, true);
@@ -315,14 +338,14 @@ function ConfirmStep({
           kind === 'deposit'
             ? await deposit(
                 { amount: draft.amount, currency: CURRENCY, reference: draft.reference },
-                key,
+                idempotencyKey,
               )
-            : await withdraw({ amount: draft.amount, currency: CURRENCY }, key);
-        renew();
+            : await withdraw({ amount: draft.amount, currency: CURRENCY }, idempotencyKey);
+        onKeySpent();
         onDone(result);
       } catch (caught) {
         if (isKeySpentError(caught)) {
-          renew();
+          onKeySpent();
         }
         if (isKycRequired(caught)) {
           setKycRequired(true);
@@ -339,6 +362,7 @@ function ConfirmStep({
         setError({
           described: describeError(caught),
           code: caught instanceof ApiError ? caught.errorCode : undefined,
+          unknownOutcome: isUnknownOutcome(caught),
         });
       }
     });
@@ -380,6 +404,16 @@ function ConfirmStep({
         <ErrorNotice error={error.described}>
           {error.code === 'WALLET_FROZEN' && <p className="text-sm">{FROZEN_HINT}</p>}
         </ErrorNotice>
+      )}
+      {error?.unknownOutcome && (
+        <InfoNotice>
+          <p>{MOVEMENT_UNKNOWN_OUTCOME_MESSAGE}</p>
+          <p className="mt-1">
+            <Link to="/transactions" className={LINK_CLASSES}>
+              Open your transaction history
+            </Link>
+          </p>
+        </InfoNotice>
       )}
       <div className="flex flex-wrap gap-2">
         <button

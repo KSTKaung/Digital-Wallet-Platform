@@ -1,9 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import type { DescribedError } from '../api/errorMessages';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { describeError, type DescribedError } from '../api/errorMessages';
 
 /**
  * Error summary for a failed request: announced (role="alert") and focused when it appears or
- * changes, with the correlation id as a reference for support (doc 02 §1.7).
+ * changes, with the correlation id as a reference for support (doc 02 §1.7). It refocuses when the
+ * `error` object changes, so pass a stable object (state, a constant, or LoadErrorNotice), never
+ * one built during render, or every re-render steals the focus.
  */
 export function ErrorNotice({ error, children }: { error: DescribedError; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -24,6 +26,15 @@ export function ErrorNotice({ error, children }: { error: DescribedError; childr
       {children}
     </div>
   );
+}
+
+/**
+ * ErrorNotice for a raw error kept in state (a failed load): the description is memoised on the
+ * error, so a re-render with the same error keeps the focus where the user put it.
+ */
+export function LoadErrorNotice({ error, children }: { error: unknown; children?: ReactNode }) {
+  const described = useMemo(() => describeError(error), [error]);
+  return <ErrorNotice error={described}>{children}</ErrorNotice>;
 }
 
 /** A neutral or success message (role="status", announced politely). */

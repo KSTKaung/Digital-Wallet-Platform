@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { describeError } from '../../api/errorMessages';
 import { listTransfers, type Transfer } from '../../api/transfers';
 import { BangkokTime } from '../../components/BangkokTime';
 import { useLoad, usePageParam } from '../../components/dataHooks';
-import { ErrorNotice } from '../../components/ErrorNotice';
+import { LoadErrorNotice } from '../../components/ErrorNotice';
 import { useFocusOn } from '../../components/formHooks';
 import { Pager } from '../../components/Pager';
 import { RefreshFailed } from '../../components/RefreshFailed';
@@ -96,11 +95,11 @@ function TransferList({
         </p>
       )}
       {load.kind === 'error' && (
-        <ErrorNotice error={describeError(load.error)}>
+        <LoadErrorNotice error={load.error}>
           <button type="button" onClick={retry} className={`${SECONDARY_BUTTON_CLASSES} mt-2`}>
             Try again
           </button>
-        </ErrorNotice>
+        </LoadErrorNotice>
       )}
       {load.kind === 'loaded' && (
         <>

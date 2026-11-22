@@ -2,11 +2,16 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError } from '../../api/client';
 import { describeError, isKycRequired, type DescribedError } from '../../api/errorMessages';
-import { isKeySpentError, useIdempotencyKey } from '../../api/idempotency';
+import {
+  draftFingerprint,
+  isKeySpentError,
+  isUnknownOutcome,
+  useDraftIdempotencyKey,
+} from '../../api/idempotency';
 import { createTransfer, getTransfer, type Transfer } from '../../api/transfers';
 import { lookupWallet } from '../../api/wallet';
 import { BangkokTime } from '../../components/BangkokTime';
-import { ErrorNotice } from '../../components/ErrorNotice';
+import { ErrorNotice, InfoNotice } from '../../components/ErrorNotice';
 import {
   useCountdown,
   useFocusFirstInvalid,
@@ -57,6 +62,10 @@ type Step =
   | { kind: 'confirm'; draft: Draft }
   | { kind: 'done'; transfer: Transfer };
 
+/** After a network error or a 5xx: the transfer may have been created (the key is kept). */
+export const TRANSFER_UNKNOWN_OUTCOME_MESSAGE =
+  'We could not confirm whether this transfer went through. Check your transfers before trying again. While you stay on this page, confirming the same details again is safe.';
+
 const PANEL_CLASSES =
   'space-y-2 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900';
 
@@ -64,10 +73,12 @@ const PANEL_CLASSES =
  * Transfer to another wallet (doc 02 §2.3 lookup, §2.4; doc 05 §5.2): recipient → amount →
  * confirm → result. The recipient's masked name and number are shown before confirming
  * (MVP-ADR-20). The browser checks formats only; eligibility, limits, balance and risk are the
- * server's (D8). The confirm step owns the Idempotency-Key (doc 02 §1.4, §7 rule 3).
+ * server's (D8). The page holds the Idempotency-Key bound to the draft (doc 02 §1.4, §7 rule 3;
+ * see api/idempotency.ts): coming back to confirm exactly the same draft reuses it.
  */
 export function TransferPage() {
   const { load, reload, retry } = useWalletOverview();
+  const idempotency = useDraftIdempotencyKey();
   const [step, setStep] = useState<Step>({ kind: 'recipient' });
   const [numberInput, setNumberInput] = useState('');
   const [amountInput, setAmountInput] = useState('');
@@ -146,12 +157,23 @@ export function TransferPage() {
                   onAmount={setAmountInput}
                   onDescription={setDescriptionInput}
                   onChangeRecipient={() => goTo({ kind: 'recipient' })}
-                  onReview={(draft) => goTo({ kind: 'confirm', draft })}
+                  onReview={(draft) => {
+                    idempotency.open(
+                      draftFingerprint(
+                        draft.recipient.walletNumber,
+                        draft.amount,
+                        draft.description,
+                      ),
+                    );
+                    goTo({ kind: 'confirm', draft });
+                  }}
                 />
               )}
-              {step.kind === 'confirm' && (
+              {step.kind === 'confirm' && idempotency.key !== null && (
                 <ConfirmStep
                   draft={step.draft}
+                  idempotencyKey={idempotency.key}
+                  onKeySpent={idempotency.renew}
                   onEdit={() => goTo({ kind: 'details', recipient: step.draft.recipient })}
                   onChangeRecipient={() => goTo({ kind: 'recipient' })}
                   onDone={(transfer) => {
@@ -419,29 +441,37 @@ function DetailsStep({
 }
 
 /**
- * Step 3. Its Idempotency-Key is created when it mounts and sent on every attempt from here: a
- * double click is refused while a request is in flight, and a retry after a network error, a 5xx,
- * a 429 or a 404 reuses the key (none of them leaves a record). After a stored refusal,
- * `RISK_BLOCKED` or `IDEMPOTENCY_KEY_REUSED` the key is renewed; "Edit" and "Change recipient"
- * unmount the step, so the next confirm step gets a new key.
+ * Step 3. It sends the page's key for this draft on every attempt: a double click is refused
+ * while a request is in flight, and a retry after a network error, a 5xx, a 429 or a 404 reuses
+ * the key; so does coming back through "Edit" or "Change recipient" with exactly the same draft
+ * (after an unknown outcome the transfer may exist, and the server replays it for that key).
+ * After a success, a stored refusal, `RISK_BLOCKED` or `IDEMPOTENCY_KEY_REUSED` the page renews
+ * the key (onKeySpent).
  */
 function ConfirmStep({
   draft,
+  idempotencyKey,
+  onKeySpent,
   onEdit,
   onChangeRecipient,
   onDone,
   onWalletChanged,
 }: {
   draft: Draft;
+  idempotencyKey: string;
+  onKeySpent: () => void;
   onEdit: () => void;
   onChangeRecipient: () => void;
   onDone: (transfer: Transfer) => void;
   onWalletChanged: () => void;
 }) {
-  const { key, renew } = useIdempotencyKey();
   const { busy, run } = useSubmitGuard();
   const { seconds: waitSeconds, start: startWait } = useCountdown(0);
-  const [error, setError] = useState<{ described: DescribedError; code?: string } | null>(null);
+  const [error, setError] = useState<{
+    described: DescribedError;
+    code?: string;
+    unknownOutcome: boolean;
+  } | null>(null);
   const [kycRequired, setKycRequired] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   useFocusOn(headingRef, true);
@@ -457,13 +487,13 @@ function ConfirmStep({
             currency: CURRENCY,
             description: draft.description,
           },
-          key,
+          idempotencyKey,
         );
-        renew();
+        onKeySpent();
         onDone(result);
       } catch (caught) {
         if (isKeySpentError(caught)) {
-          renew();
+          onKeySpent();
         }
         if (isKycRequired(caught)) {
           setKycRequired(true);
@@ -480,6 +510,7 @@ function ConfirmStep({
         setError({
           described: describeError(caught, { NOT_FOUND: RECIPIENT_NOT_FOUND_MESSAGE }),
           code: caught instanceof ApiError ? caught.errorCode : undefined,
+          unknownOutcome: isUnknownOutcome(caught),
         });
       }
     });
@@ -524,6 +555,16 @@ function ConfirmStep({
         <ErrorNotice error={error.described}>
           {frozen && <p className="text-sm">{FROZEN_HINT}</p>}
         </ErrorNotice>
+      )}
+      {error?.unknownOutcome && (
+        <InfoNotice>
+          <p>{TRANSFER_UNKNOWN_OUTCOME_MESSAGE}</p>
+          <p className="mt-1">
+            <Link to="/transfers" className={LINK_CLASSES}>
+              Open your transfers
+            </Link>
+          </p>
+        </InfoNotice>
       )}
       <div className="flex flex-wrap gap-2">
         <button

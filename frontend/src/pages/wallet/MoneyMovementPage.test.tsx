@@ -8,7 +8,7 @@ import { AMOUNT_MESSAGES } from '../../format/money';
 import { deferred, errorResponse, jsonResponse, makeJwt, stubFetch } from '../../test/http';
 import { renderRoute } from '../../test/render';
 import { ACTIVE_WALLET, FROZEN_WALLET, LIMITS } from '../../test/walletFixtures';
-import { FROZEN_HINT } from './MoneyMovementPage';
+import { FROZEN_HINT, MOVEMENT_UNKNOWN_OUTCOME_MESSAGE } from './MoneyMovementPage';
 import { FROZEN_EXPLANATION, NOTE_MESSAGES } from './walletText';
 
 const CUSTOMER = makeJwt({ sub: 'cust-1', roles: ['CUSTOMER'], sid: 's1' });
@@ -212,7 +212,42 @@ describe('Deposit page', () => {
     expect(new Set(keys).size).toBe(1);
   });
 
-  it('Edit returns to the form with the values kept, and the next confirm uses a new key', async () => {
+  it.each([
+    ['a network error', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['500', () => Promise.resolve(errorResponse(500, 'SYSTEM_ERROR'))],
+    ['a non-JSON 504', () => Promise.resolve(new Response('Gateway Timeout', { status: 504 }))],
+  ])('after %s, Edit and the same draft confirm with the SAME key', async (_name, failure) => {
+    const user = userEvent.setup();
+    const { http } = await open('/deposit', {
+      [`POST ${DEPOSITS}`]: [failure, () => jsonResponse(201, DEPOSIT_RESULT)],
+    });
+
+    await review(user, '150.50', 'Rent');
+    await user.click(screen.getByRole('button', { name: 'Confirm deposit' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText(MOVEMENT_UNKNOWN_OUTCOME_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open your transaction history' })).toHaveAttribute(
+      'href',
+      '/transactions',
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByRole('heading', { name: 'Amount' })).toHaveFocus();
+    expect(screen.getByLabelText('Amount (THB)')).toHaveValue('150.50');
+    expect(screen.getByLabelText('Note (optional)')).toHaveValue('Rent');
+    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm deposit' }));
+
+    await screen.findByRole('region', { name: 'Deposit completed' });
+    const [first, second] = keysOf(http, DEPOSITS);
+    expect(first).toMatch(UUID_V4);
+    expect(second).toBe(first);
+  });
+
+  it.each([
+    ['the amount', '150.51', 'Rent'],
+    ['the note', '150.50', 'Rent2'],
+  ])('after an unknown outcome, changing %s sends a new key', async (_name, amount, note) => {
     const user = userEvent.setup();
     const { http } = await open('/deposit', {
       [`POST ${DEPOSITS}`]: [
@@ -225,18 +260,26 @@ describe('Deposit page', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm deposit' }));
     await screen.findByRole('alert');
     await user.click(screen.getByRole('button', { name: 'Edit' }));
-
-    expect(screen.getByRole('heading', { name: 'Amount' })).toHaveFocus();
-    expect(screen.getByLabelText('Amount (THB)')).toHaveValue('150.50');
-    expect(screen.getByLabelText('Note (optional)')).toHaveValue('Rent');
-    await user.click(screen.getByRole('button', { name: 'Review' }));
+    await user.clear(screen.getByLabelText('Note (optional)'));
+    await review(user, amount, note);
     await user.click(screen.getByRole('button', { name: 'Confirm deposit' }));
 
     await screen.findByRole('region', { name: 'Deposit completed' });
     const [first, second] = keysOf(http, DEPOSITS);
-    expect(first).toMatch(UUID_V4);
     expect(second).toMatch(UUID_V4);
     expect(second).not.toBe(first);
+  });
+
+  it('a known refusal (400) shows no unknown-outcome note', async () => {
+    const user = userEvent.setup();
+    await open('/deposit', {
+      [`POST ${DEPOSITS}`]: () => errorResponse(400, 'VALIDATION_ERROR', 'amount is invalid'),
+    });
+
+    await review(user, '150.50');
+    await user.click(screen.getByRole('button', { name: 'Confirm deposit' }));
+    await screen.findByRole('alert');
+    expect(screen.queryByText(MOVEMENT_UNKNOWN_OUTCOME_MESSAGE)).not.toBeInTheDocument();
   });
 
   it('after a success, "Make another deposit" starts an empty form with a new key', async () => {
@@ -340,6 +383,50 @@ describe('Withdraw page', () => {
     await screen.findByRole('region', { name: 'Withdrawal completed' });
     const [first, second] = keysOf(http, WITHDRAWALS);
     expect(second).not.toBe(first);
+  });
+
+  it('after a stored refusal, Edit and the same draft use a new key', async () => {
+    const user = userEvent.setup();
+    const { http } = await open('/withdraw', {
+      [`POST ${WITHDRAWALS}`]: [
+        () => errorResponse(409, 'INSUFFICIENT_BALANCE'),
+        () => jsonResponse(201, WITHDRAWAL_RESULT),
+      ],
+    });
+
+    await review(user, '200');
+    await user.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+    await screen.findByRole('alert');
+    expect(screen.queryByText(MOVEMENT_UNKNOWN_OUTCOME_MESSAGE)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await review(user, '200');
+    await user.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+
+    await screen.findByRole('region', { name: 'Withdrawal completed' });
+    const [first, second] = keysOf(http, WITHDRAWALS);
+    expect(second).toMatch(UUID_V4);
+    expect(second).not.toBe(first);
+  });
+
+  it('after a network error, Edit and the same withdrawal confirm with the same key', async () => {
+    const user = userEvent.setup();
+    const { http } = await open('/withdraw', {
+      [`POST ${WITHDRAWALS}`]: [
+        () => Promise.reject(new TypeError('Failed to fetch')),
+        () => jsonResponse(201, WITHDRAWAL_RESULT),
+      ],
+    });
+
+    await review(user, '200');
+    await user.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+    await screen.findByText(MOVEMENT_UNKNOWN_OUTCOME_MESSAGE);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await review(user, '200');
+    await user.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
+
+    await screen.findByRole('region', { name: 'Withdrawal completed' });
+    const [first, second] = keysOf(http, WITHDRAWALS);
+    expect(second).toBe(first);
   });
 
   it.each([

@@ -61,8 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await authApi.logout();
-    navigate('/login', { replace: true });
+    const confirmed = await authApi.logout();
+    navigate('/login', {
+      replace: true,
+      state: loginStateFor(confirmed ? 'loggedOut' : 'logoutUnconfirmed', pathnameRef.current),
+    });
   }, [navigate]);
 
   const value = useMemo<AuthContextValue>(() => {

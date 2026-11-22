@@ -184,6 +184,21 @@ describe('Transfers list', () => {
     expect(await (await findTable()).findByText('Completed')).toBeInTheDocument();
   });
 
+  it('a re-render with the same load error does not take the focus back', async () => {
+    setup({ [`GET ${LIST}`]: () => errorResponse(500, 'SYSTEM_ERROR') });
+    const router = renderRoute('/transfers');
+
+    expect(await screen.findByRole('alert')).toHaveFocus();
+    const home = screen.getByRole('link', { name: 'Home' });
+    home.focus();
+    await act(async () => {
+      await router.navigate('/transfers', { state: { rerender: 1 } });
+    });
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(home).toHaveFocus();
+  });
+
   it('refreshes on the button and on window focus, keeping the data when a refresh fails', async () => {
     const user = userEvent.setup();
     const http = setup({
@@ -241,6 +256,24 @@ describe('Transfer detail', () => {
     expect(alert).toHaveTextContent(TRANSFER_NOT_FOUND_MESSAGE);
     expect(alert).not.toHaveTextContent('id: bad');
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['the not-found message', 404, 'NOT_FOUND'],
+    ['another load error', 500, 'SYSTEM_ERROR'],
+  ])('a re-render with %s does not take the focus back', async (_name, status, code) => {
+    setup({ [`GET ${DETAIL}`]: () => errorResponse(status, code) });
+    const router = renderRoute(`/transfers/${HELD_TRANSFER.id}`);
+
+    expect(await screen.findByRole('alert')).toHaveFocus();
+    const back = screen.getByRole('link', { name: 'Back to your transfers' });
+    back.focus();
+    await act(async () => {
+      await router.navigate(`/transfers/${HELD_TRANSFER.id}`, { state: { rerender: 1 } });
+    });
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(back).toHaveFocus();
   });
 
   it('shows another load error with a retry', async () => {
@@ -319,6 +352,31 @@ describe('Transfer detail', () => {
     const calls = http.callsTo('POST', CANCEL);
     expect(calls).toHaveLength(1);
     expect(calls[0]!.headers.has('Idempotency-Key')).toBe(false);
+  });
+
+  it('a refetch still in flight when the cancel answers cannot bring the old state back', async () => {
+    const user = userEvent.setup();
+    const stale = deferred<Response>();
+    const http = setup({
+      [`GET ${DETAIL}`]: [() => jsonResponse(200, HELD_TRANSFER), () => stale.promise],
+      [`POST ${CANCEL}`]: () => jsonResponse(200, CANCELLED_TRANSFER),
+    });
+    renderRoute(`/transfers/${HELD_TRANSFER.id}`);
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel transfer' }));
+    fireEvent.focus(window);
+    await waitFor(() => expect(http.callsTo('GET', DETAIL)).toHaveLength(2));
+    await user.click(screen.getByRole('button', { name: 'Yes, cancel the transfer' }));
+    expect(await screen.findByText(CANCELLED_MESSAGE)).toBeInTheDocument();
+
+    await act(async () => {
+      stale.resolve(jsonResponse(200, HELD_TRANSFER));
+      await stale.promise;
+    });
+
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel transfer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refreshing…' })).not.toBeInTheDocument();
   });
 
   it('on 409 INVALID_TRANSFER_STATE explains it and reloads the detail', async () => {

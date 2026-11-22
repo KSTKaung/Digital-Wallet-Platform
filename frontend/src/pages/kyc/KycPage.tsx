@@ -96,9 +96,12 @@ export function KycPage() {
   const [focusKey, setFocusKey] = useState(0);
   const statusHeadingRef = useRef<HTMLHeadingElement>(null);
   useFocusOn(statusHeadingRef, focusKey);
+  // The status load in flight, so a mutation answer can cancel it (see applyApplication).
+  const inFlight = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    inFlight.current = controller;
     fetchView(controller.signal)
       .then((view) => {
         if (controller.signal.aborted) {
@@ -129,9 +132,13 @@ export function KycPage() {
 
   /**
    * A successful create, edit or submit: the response is the application's new state, and the
-   * application /kyc/status reports from now on, so the next refetch loads the same id.
+   * application /kyc/status reports from now on, so the next refetch loads the same id. A status
+   * load still in flight (focus refetch, Refresh) is aborted: it may have been answered before
+   * the change and would put the older state (and its buttons) back on screen.
    */
   const applyApplication = useCallback((application: KycApplication, message: string) => {
+    inFlight.current?.abort();
+    setRefreshing(false);
     setConflict(null);
     setNotice(message);
     setLoad((prev) =>

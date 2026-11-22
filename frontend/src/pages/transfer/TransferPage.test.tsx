@@ -18,6 +18,7 @@ import { ACTIVE_WALLET, FROZEN_WALLET, LIMITS } from '../../test/walletFixtures'
 import { FROZEN_HINT } from '../wallet/MoneyMovementPage';
 import { FROZEN_EXPLANATION } from '../wallet/walletText';
 import { CANCELLED_MESSAGE } from './CancelTransfer';
+import { TRANSFER_UNKNOWN_OUTCOME_MESSAGE } from './TransferPage';
 import {
   DESCRIPTION_MESSAGES,
   RECIPIENT_NOT_FOUND_MESSAGE,
@@ -636,6 +637,116 @@ describe('Transfer page: confirm and result', () => {
     expect(http.callsTo('POST', TRANSFERS)[1]!.body).toContain(
       '"receiverWalletNumber":"11111111116"',
     );
+  });
+
+  it.each([
+    ['a network error', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['500', () => Promise.resolve(errorResponse(500, 'SYSTEM_ERROR'))],
+    ['a non-JSON 504', () => Promise.resolve(new Response('Gateway Timeout', { status: 504 }))],
+  ])('after %s, Edit and the same draft confirm with the SAME key', async (_name, failure) => {
+    const user = userEvent.setup();
+    const { http } = await open({
+      [`POST ${TRANSFERS}`]: [failure, () => jsonResponse(201, COMPLETED_TRANSFER)],
+    });
+
+    const confirm = await toConfirm(user, '1500', 'Rent');
+    await user.click(confirm.getByRole('button', { name: 'Confirm transfer' }));
+    expect(await screen.findByText(TRANSFER_UNKNOWN_OUTCOME_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open your transfers' })).toHaveAttribute(
+      'href',
+      '/transfers',
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await enterAmount(user, '1500', 'Rent');
+    await user.click(screen.getByRole('button', { name: 'Confirm transfer' }));
+
+    await screen.findByRole('region', { name: 'Transfer completed' });
+    const [first, second] = keysOf(http);
+    expect(first).toMatch(UUID_V4);
+    expect(second).toBe(first);
+  });
+
+  it('after an unknown outcome, the same recipient found again keeps the key', async () => {
+    const user = userEvent.setup();
+    const { http } = await open({
+      [`POST ${TRANSFERS}`]: [
+        () => Promise.reject(new TypeError('Failed to fetch')),
+        () => jsonResponse(201, COMPLETED_TRANSFER),
+      ],
+    });
+
+    const confirm = await toConfirm(user);
+    await user.click(confirm.getByRole('button', { name: 'Confirm transfer' }));
+    await screen.findByText(TRANSFER_UNKNOWN_OUTCOME_MESSAGE);
+    await user.click(screen.getByRole('button', { name: 'Change recipient' }));
+    await findRecipient(user);
+    await enterAmount(user, '1500');
+    await user.click(screen.getByRole('button', { name: 'Confirm transfer' }));
+
+    await screen.findByRole('region', { name: 'Transfer completed' });
+    const [first, second] = keysOf(http);
+    expect(second).toBe(first);
+  });
+
+  it('after an unknown outcome, a changed description sends a new key', async () => {
+    const user = userEvent.setup();
+    const { http } = await open({
+      [`POST ${TRANSFERS}`]: [
+        () => errorResponse(500, 'SYSTEM_ERROR'),
+        () => jsonResponse(201, COMPLETED_TRANSFER),
+      ],
+    });
+
+    const confirm = await toConfirm(user, '1500', 'Rent');
+    await user.click(confirm.getByRole('button', { name: 'Confirm transfer' }));
+    await screen.findByText(TRANSFER_UNKNOWN_OUTCOME_MESSAGE);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await enterAmount(user, '1500', 'Rent ');
+    await user.click(screen.getByRole('button', { name: 'Confirm transfer' }));
+
+    await screen.findByRole('region', { name: 'Transfer completed' });
+    const [first, second] = keysOf(http);
+    expect(second).toMatch(UUID_V4);
+    expect(second).not.toBe(first);
+  });
+
+  it('after RISK_BLOCKED, Edit and the same draft use a new key, with no unknown-outcome note', async () => {
+    const user = userEvent.setup();
+    const { http } = await open({
+      [`POST ${TRANSFERS}`]: [
+        () => errorResponse(403, 'RISK_BLOCKED'),
+        () => jsonResponse(201, COMPLETED_TRANSFER),
+      ],
+    });
+
+    const confirm = await toConfirm(user);
+    await user.click(confirm.getByRole('button', { name: 'Confirm transfer' }));
+    await screen.findByRole('alert');
+    expect(screen.queryByText(TRANSFER_UNKNOWN_OUTCOME_MESSAGE)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await enterAmount(user, '1500');
+    await user.click(screen.getByRole('button', { name: 'Confirm transfer' }));
+
+    await screen.findByRole('region', { name: 'Transfer completed' });
+    const [first, second] = keysOf(http);
+    expect(second).toMatch(UUID_V4);
+    expect(second).not.toBe(first);
+  });
+
+  it('"Make another transfer" with exactly the same details uses a new key', async () => {
+    const user = userEvent.setup();
+    const { http } = await open();
+
+    const confirm = await toConfirm(user, '1500', 'Rent');
+    await user.click(confirm.getByRole('button', { name: 'Confirm transfer' }));
+    await user.click(await screen.findByRole('button', { name: 'Make another transfer' }));
+    const again = await toConfirm(user, '1500', 'Rent');
+    await user.click(again.getByRole('button', { name: 'Confirm transfer' }));
+
+    await screen.findByRole('region', { name: 'Transfer completed' });
+    const [first, second] = keysOf(http);
+    expect(second).toMatch(UUID_V4);
+    expect(second).not.toBe(first);
   });
 
   it('"Make another transfer" starts empty and the next confirm uses a new key', async () => {

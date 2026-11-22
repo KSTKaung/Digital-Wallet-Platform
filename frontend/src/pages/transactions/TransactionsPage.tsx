@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { describeError } from '../../api/errorMessages';
 import { listTransactions, type Transaction } from '../../api/transactions';
 import { BangkokTime } from '../../components/BangkokTime';
 import { useLoad, usePageParam } from '../../components/dataHooks';
-import { ErrorNotice } from '../../components/ErrorNotice';
+import { LoadErrorNotice } from '../../components/ErrorNotice';
 import { useFocusOn } from '../../components/formHooks';
 import { Pager } from '../../components/Pager';
 import { RefreshFailed } from '../../components/RefreshFailed';
@@ -98,11 +97,11 @@ function TransactionList({
         </p>
       )}
       {load.kind === 'error' && (
-        <ErrorNotice error={describeError(load.error)}>
+        <LoadErrorNotice error={load.error}>
           <button type="button" onClick={retry} className={`${SECONDARY_BUTTON_CLASSES} mt-2`}>
             Try again
           </button>
-        </ErrorNotice>
+        </LoadErrorNotice>
       )}
       {load.kind === 'loaded' && (
         <>

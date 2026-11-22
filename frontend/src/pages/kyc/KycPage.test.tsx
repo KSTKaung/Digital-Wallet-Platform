@@ -653,6 +653,36 @@ describe('KycPage freshness (no polling)', () => {
     expect(http.callsTo('GET', '/api/v1/kyc/status')).toHaveLength(2);
   });
 
+  it('a refetch still in flight when a submit answers cannot bring the draft back', async () => {
+    setSession(CUSTOMER, 900);
+    const user = userEvent.setup();
+    const stale = deferred<Response>();
+    const { http } = stubKyc(status('DRAFT'), {
+      'GET /api/v1/kyc/status': [() => jsonResponse(200, status('DRAFT')), () => stale.promise],
+      [`POST ${DETAIL_PATH}/submit`]: () => jsonResponse(200, PENDING),
+    });
+    renderRoute('/kyc');
+
+    await screen.findByRole('region', { name: 'Your draft application' });
+    await user.click(screen.getByRole('button', { name: 'Submit for review' }));
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(http.callsTo('GET', '/api/v1/kyc/status')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Yes, submit' }));
+    expect(await screen.findByRole('heading', { name: 'Waiting for review' })).toBeInTheDocument();
+
+    await act(async () => {
+      stale.resolve(jsonResponse(200, status('DRAFT')));
+      await stale.promise;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(screen.getByRole('heading', { name: 'Waiting for review' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit for review' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeEnabled();
+  });
+
   it('keeps the last status and shows the error when a refresh fails', async () => {
     setSession(CUSTOMER, 900);
     const user = userEvent.setup();

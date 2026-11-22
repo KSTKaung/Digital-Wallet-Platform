@@ -98,27 +98,42 @@ export async function login(request: LoginRequest): Promise<SessionSnapshot> {
  * Logout with an expired access token returns 401 and keeps the refresh cookie (MVP-ADR-23), so
  * a missing or expiring token is refreshed first, and a 401 from logout is followed by one
  * refresh and one more logout. Never throws.
+ *
+ * Resolves true when the server confirmed it: logout answered 2xx, or a refresh said the session
+ * was already gone (401/403). Resolves false for anything else (network error, 5xx, 429, a
+ * logout that failed again after the refresh): the HttpOnly refresh cookie may still be valid,
+ * so the next page load could restore the session. The end reason (`loggedOut` or
+ * `logoutUnconfirmed`) is recorded either way, so /login shows the matching notice.
  */
-export async function logout(): Promise<void> {
+export async function logout(): Promise<boolean> {
+  let confirmed = false;
   try {
-    if (!hasFreshAccessToken() && (await refreshAccessToken()) === 'signedOut') {
-      return;
-    }
-    try {
-      await postLogout();
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 401) {
-        return;
-      }
-      if ((await refreshAccessToken()) === 'refreshed') {
-        await postLogout();
-      }
-    }
+    confirmed = await endServerSession();
   } catch {
-    // Network or server failure: local state is cleared below regardless.
+    // Network or server failure: unconfirmed; local state is cleared below regardless.
   } finally {
-    clearSession('loggedOut');
+    clearSession(confirmed ? 'loggedOut' : 'logoutUnconfirmed');
   }
+  return confirmed;
+}
+
+async function endServerSession(): Promise<boolean> {
+  if (!hasFreshAccessToken() && (await refreshAccessToken()) === 'signedOut') {
+    return true;
+  }
+  try {
+    await postLogout();
+    return true;
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401) {
+      return false;
+    }
+  }
+  if ((await refreshAccessToken()) === 'signedOut') {
+    return true;
+  }
+  await postLogout();
+  return true;
 }
 
 function postLogout(): Promise<void> {

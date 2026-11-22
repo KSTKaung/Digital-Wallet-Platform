@@ -53,9 +53,12 @@ export function useLoad<T>(fetcher: (signal: AbortSignal) => Promise<T>) {
   const [refreshError, setRefreshError] = useState<{ error: unknown } | null>(null);
   // Whether data is on screen, read by the async callbacks (state updaters stay pure).
   const hasData = useRef(false);
+  // The load in flight, so setData can cancel it (its answer may predate the data being set).
+  const inFlight = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    inFlight.current = controller;
     fetcher(controller.signal)
       .then((data) => {
         if (controller.signal.aborted) {
@@ -92,8 +95,14 @@ export function useLoad<T>(fetcher: (signal: AbortSignal) => Promise<T>) {
     reload();
   }, [reload]);
 
-  /** Shows data the page already has (e.g. the cancel answer) until the next load replaces it. */
+  /**
+   * Shows data the page already has (e.g. the cancel answer) until the next load replaces it. A
+   * load still in flight (focus refetch, Refresh) is aborted first: it may have been answered
+   * before the change, and must not put the older state back on screen.
+   */
   const setData = useCallback((data: T) => {
+    inFlight.current?.abort();
+    setRefreshing(false);
     hasData.current = true;
     setLoad({ kind: 'loaded', data });
     setRefreshError(null);
