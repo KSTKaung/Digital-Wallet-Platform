@@ -74,6 +74,56 @@ describe('LoginPage', () => {
     },
   );
 
+  it('lands a compliance officer on /admin, which opens the KYC queue', async () => {
+    const user = userEvent.setup();
+    const officer = makeJwt({ sub: 'staff-c1', roles: ['COMPLIANCE_OFFICER'], sid: 'sc' });
+    stubFetch({
+      'POST /api/v1/auth/refresh': () => errorResponse(401, 'UNAUTHORIZED'),
+      'POST /api/v1/auth/login': () => tokenResponse(officer),
+      'GET /api/v1/admin/kyc/applications': () =>
+        jsonResponse(200, {
+          items: [],
+          page: { page: 0, size: 20, totalElements: 0, totalPages: 0 },
+        }),
+    });
+    const router = renderRoute('/login');
+
+    await signIn(user);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'KYC reviews' }),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/admin/kyc');
+  });
+
+  it.each([
+    ['no "from"', undefined, '/admin/customers'],
+    ['a customer page', '/transfers', '/admin/customers'],
+    ['a staff page', '/admin', '/admin/customers'],
+  ])('lands an admin with %s on Wallet freeze', async (_name, from, expected) => {
+    const user = userEvent.setup();
+    stubs(() => tokenResponse(makeJwt({ sub: 'staff-a1', roles: ['ADMIN'], sid: 'sa' })));
+    const router = renderRoute('/login', from === undefined ? undefined : { from });
+
+    await signIn(user);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Wallet freeze' }),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(expected);
+  });
+
+  it('never returns a customer to a staff page', async () => {
+    const user = userEvent.setup();
+    stubs();
+    const router = renderRoute('/login', { from: '/admin/kyc' });
+
+    await signIn(user);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/');
+  });
+
   it('shows one generic message for every failed sign-in and clears the password', async () => {
     const user = userEvent.setup();
     stubs(() => errorResponse(401, 'UNAUTHORIZED', 'Authentication required'));

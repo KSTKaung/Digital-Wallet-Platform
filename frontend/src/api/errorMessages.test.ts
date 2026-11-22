@@ -6,6 +6,8 @@ import {
   validationErrorField,
   LOGIN_FAILED_MESSAGE,
   NETWORK_ERROR_MESSAGE,
+  STAFF_ERROR_OVERRIDES,
+  TRANSFER_DECISION_ERROR_OVERRIDES,
   waitText,
 } from './errorMessages';
 import { ApiError } from './http';
@@ -97,6 +99,16 @@ describe('describeError', () => {
     ).toBe('Description must not contain control or format characters.');
   });
 
+  it('labels the wallet freeze fields', () => {
+    expect(describeError(err(400, 'VALIDATION_ERROR', 'customerId: invalid value')).message).toBe(
+      'Customer ID invalid value.',
+    );
+    expect(
+      describeError(err(400, 'VALIDATION_ERROR', 'reason: must contain a letter or a digit'))
+        .message,
+    ).toBe('Reason must contain a letter or a digit.');
+  });
+
   it('adds the Retry-After wait to 429 and 503 messages', () => {
     expect(describeError(err(429, 'RATE_LIMITED', 'x', 30)).message).toBe(
       'Too many requests. Please wait 30 seconds and try again.',
@@ -184,5 +196,49 @@ describe('KYC helpers', () => {
       'You already have an active KYC application.',
     );
     expect(describeError(err(409, 'INVALID_KYC_STATE')).message).toMatch(/current state/);
+  });
+});
+
+describe('staff wording', () => {
+  it('overrides INVALID_KYC_STATE and FORBIDDEN for staff screens, leaving the customer texts', () => {
+    expect(describeError(err(409, 'INVALID_KYC_STATE'), STAFF_ERROR_OVERRIDES).message).toBe(
+      'This application is no longer pending review: another officer or an earlier decision has already decided it. The latest details are shown.',
+    );
+    expect(describeError(err(403, 'FORBIDDEN'), STAFF_ERROR_OVERRIDES).message).toBe(
+      'Your staff role does not allow this action.',
+    );
+    expect(describeError(err(409, 'INVALID_KYC_STATE')).message).toBe(
+      'This is not possible while your KYC application is in its current state.',
+    );
+    expect(describeError(err(403, 'FORBIDDEN')).message).toBe(
+      'This action is not available for your account.',
+    );
+  });
+
+  it('explains a late or repeated transfer decision and a party reviewer, leaving the customer texts', () => {
+    expect(describeError(err(409, 'INVALID_TRANSFER_STATE'), STAFF_ERROR_OVERRIDES).message).toBe(
+      'This transfer is no longer held for review: it has already been decided, cancelled by the sender or expired. A decision at or after the review deadline expires the transfer. The latest details are shown.',
+    );
+    expect(
+      describeError(err(409, 'INVALID_TRANSFER_STATE'), TRANSFER_DECISION_ERROR_OVERRIDES).message,
+    ).toBe(describeError(err(409, 'INVALID_TRANSFER_STATE'), STAFF_ERROR_OVERRIDES).message);
+    expect(describeError(err(403, 'FORBIDDEN'), TRANSFER_DECISION_ERROR_OVERRIDES).message).toBe(
+      'You cannot review a transfer you take part in as the sender or the recipient, and only a compliance officer can decide transfers. Nothing has changed.',
+    );
+    expect(describeError(err(409, 'INVALID_TRANSFER_STATE')).message).toBe(
+      'This transfer can no longer be cancelled: it has already been decided or has expired.',
+    );
+  });
+
+  it('labels the reason field and never echoes a value', () => {
+    expect(
+      describeError(
+        err(400, 'VALIDATION_ERROR', 'reason: must not contain the document reference'),
+        STAFF_ERROR_OVERRIDES,
+      ).message,
+    ).toBe('Reason must not contain the document reference.');
+    expect(validationErrorField(err(400, 'VALIDATION_ERROR', 'reason: must not be blank'))).toBe(
+      'reason',
+    );
   });
 });

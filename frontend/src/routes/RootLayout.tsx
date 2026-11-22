@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { AuthProvider } from '../auth/AuthProvider';
 import { useAuth } from '../auth/authContext';
+import { isStaff } from '../auth/roles';
+import { staffItemsFor } from '../pages/admin/staffNav';
 
 const NAV_LINK_BASE =
   'rounded px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600';
@@ -54,11 +56,13 @@ function Layout() {
 }
 
 /**
- * Signed in: account items and Sign out. Signed out: Sign in and Register. While the session is
+ * Signed in: the customer items or the staff items the role may use (doc 05 §7.1), then the
+ * shared account items and Sign out. Signed out: Sign in and Register. While the session is
  * being restored neither set is shown, so the navigation does not flicker between them.
  */
 function MainNav() {
-  const { status, logout, hasRole } = useAuth();
+  const { status, user, logout, hasRole } = useAuth();
+  const staff = user !== null && isStaff(user.roles);
   const [signingOut, setSigningOut] = useState(false);
   const inFlight = useRef(false);
 
@@ -124,6 +128,14 @@ function MainNav() {
                 </li>
               </>
             )}
+            {staff &&
+              staffItemsFor(hasRole).map((item) => (
+                <li key={item.to}>
+                  <NavLink to={item.to} className={navClass}>
+                    {item.label}
+                  </NavLink>
+                </li>
+              ))}
             <li>
               <NavLink to="/settings/password" className={navClass}>
                 Change password

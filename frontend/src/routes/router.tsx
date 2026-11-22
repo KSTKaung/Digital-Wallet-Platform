@@ -1,7 +1,14 @@
 import type { RouteObject } from 'react-router';
 import { RequireAuth } from '../auth/RequireAuth';
 import { RequireRole } from '../auth/RequireRole';
-import type { Role } from '../auth/tokenStore';
+import { CUSTOMER_ROLES, STAFF_ROLES } from '../auth/roles';
+import { AdminHome } from '../pages/admin/AdminHome';
+import { CustomerWalletPage } from '../pages/admin/CustomerWalletPage';
+import { KycQueuePage } from '../pages/admin/KycQueuePage';
+import { KycReviewPage } from '../pages/admin/KycReviewPage';
+import { TransferReviewPage } from '../pages/admin/TransferReviewPage';
+import { TransferReviewQueuePage } from '../pages/admin/TransferReviewQueuePage';
+import { ADMIN_ROLES, COMPLIANCE_ROLES } from '../pages/admin/staffNav';
 import { KycPage } from '../pages/kyc/KycPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage';
@@ -19,11 +26,10 @@ import { TransfersPage } from '../pages/transfer/TransfersPage';
 import { MoneyMovementPage } from '../pages/wallet/MoneyMovementPage';
 import { RootLayout } from './RootLayout';
 
-const CUSTOMER_ONLY: readonly Role[] = ['CUSTOMER'];
-
 /**
  * The application's route table. App.tsx mounts it in a browser router; tests mount the same
- * table in a memory router. Later steps add their pages as children of the layout route.
+ * table in a memory router. The guards are for the UI only (doc 05 §7.1): the server refuses
+ * every call a role may not make.
  */
 export const routes: RouteObject[] = [
   {
@@ -42,7 +48,7 @@ export const routes: RouteObject[] = [
         children: [{ path: 'settings/password', element: <ChangePasswordPage /> }],
       },
       {
-        element: <RequireRole roles={CUSTOMER_ONLY} />,
+        element: <RequireRole roles={CUSTOMER_ROLES} />,
         children: [
           { path: 'profile', element: <ProfilePage /> },
           { path: 'kyc', element: <KycPage /> },
@@ -55,6 +61,28 @@ export const routes: RouteObject[] = [
           { path: 'transfers', element: <TransfersPage /> },
           { path: 'transfers/:id', element: <TransferDetailPage /> },
           { path: 'transactions', element: <TransactionsPage /> },
+        ],
+      },
+      {
+        // The staff area (doc 05 §7.1); each screen is guarded by the roles that may use it.
+        path: 'admin',
+        element: <RequireRole roles={STAFF_ROLES} />,
+        children: [
+          { index: true, element: <AdminHome /> },
+          {
+            element: <RequireRole roles={COMPLIANCE_ROLES} />,
+            children: [
+              { path: 'kyc', element: <KycQueuePage /> },
+              { path: 'kyc/:id', element: <KycReviewPage /> },
+              { path: 'transfer-reviews', element: <TransferReviewQueuePage /> },
+              { path: 'transfer-reviews/:transferId', element: <TransferReviewPage /> },
+            ],
+          },
+          {
+            element: <RequireRole roles={ADMIN_ROLES} />,
+            children: [{ path: 'customers', element: <CustomerWalletPage /> }],
+          },
+          { path: '*', element: <NotFoundPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

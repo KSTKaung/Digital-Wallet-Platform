@@ -38,7 +38,10 @@ public class KycReviewController {
     this.reviews = reviews;
   }
 
-  /** Submitted applications in {@code status} (default {@code PENDING_REVIEW}), newest first. */
+  /**
+   * Submitted applications in {@code status} (default {@code PENDING_REVIEW}), oldest submission
+   * first.
+   */
   @GetMapping
   PageResponse<KycReviewSummaryResponse> list(
       @RequestParam(defaultValue = "PENDING_REVIEW") String status,

@@ -1,6 +1,9 @@
 // Open-redirect guard for "return to where you were" after signing in. The target comes from
 // router state, which any page (or a crafted history entry) can set, so it is checked before use.
 
+import { isStaff } from './roles';
+import type { Role } from './tokenStore';
+
 export const DEFAULT_AFTER_LOGIN = '/';
 
 const AUTH_PAGES = ['/login', '/register', '/verify', '/forgot-password', '/reset-password'];
@@ -23,9 +26,34 @@ export function safeRedirectPath(from: unknown): string {
   if (/[\\\s\u0000-\u001f\u007f]/.test(from)) {
     return DEFAULT_AFTER_LOGIN;
   }
-  const pathname = from.split(/[?#]/, 1)[0]!.replace(/\/+$/, '') || '/';
-  if (AUTH_PAGES.includes(pathname.toLowerCase())) {
+  if (AUTH_PAGES.includes(pathnameOf(from))) {
     return DEFAULT_AFTER_LOGIN;
   }
   return from;
+}
+
+/** The staff landing page (doc 05 §7.1: staff screens are under /admin). */
+export const STAFF_HOME = '/admin';
+
+/** Pages both kinds of account use. */
+const SHARED_PAGES = ['/settings/password'];
+
+/**
+ * Where to go after signing in: `from` when it is safe (safeRedirectPath) and meant for this kind
+ * of account. Staff land on /admin unless `from` is a staff or shared page; customers never return
+ * to an /admin page. Matching is case-insensitive, as the router's is. UI only: the server decides.
+ */
+export function afterLoginPath(from: unknown, roles: readonly Role[]): string {
+  const safe = safeRedirectPath(from);
+  const pathname = pathnameOf(safe);
+  const staffPage = pathname === STAFF_HOME || pathname.startsWith(`${STAFF_HOME}/`);
+  if (isStaff(roles)) {
+    return staffPage || SHARED_PAGES.includes(pathname) ? safe : STAFF_HOME;
+  }
+  return staffPage ? DEFAULT_AFTER_LOGIN : safe;
+}
+
+/** "/Admin/KYC/?x=1" → "/admin/kyc" */
+function pathnameOf(path: string): string {
+  return (path.split(/[?#]/, 1)[0]!.replace(/\/+$/, '') || '/').toLowerCase();
 }

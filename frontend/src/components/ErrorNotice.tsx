@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
-import { describeError, type DescribedError } from '../api/errorMessages';
+import { describeError, type DescribedError, type ErrorOverrides } from '../api/errorMessages';
 
 /**
  * Error summary for a failed request: announced (role="alert") and focused when it appears or
@@ -33,8 +33,17 @@ export function ErrorNotice({ error, children }: { error: DescribedError; childr
  * ErrorNotice for a raw error kept in state (a failed load): the description is memoised on the
  * error, so a re-render with the same error keeps the focus where the user put it.
  */
-export function LoadErrorNotice({ error, children }: { error: unknown; children?: ReactNode }) {
-  const described = useMemo(() => describeError(error), [error]);
+export function LoadErrorNotice({
+  error,
+  overrides,
+  children,
+}: {
+  error: unknown;
+  /** Per-screen wording (describeError); pass a module constant so the memo holds. */
+  overrides?: ErrorOverrides;
+  children?: ReactNode;
+}) {
+  const described = useMemo(() => describeError(error, overrides), [error, overrides]);
   return <ErrorNotice error={described}>{children}</ErrorNotice>;
 }
 
