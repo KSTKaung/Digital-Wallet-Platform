@@ -18,13 +18,12 @@ import { formatMoney } from '../../format/money';
 import { TransferLedger, TransferStatusChip } from '../transfer/TransferParts';
 import { TransferDecision, type RefusalKind, type TransferDecisionKind } from './TransferDecision';
 import {
-  APPROVED_TRANSFER_MESSAGE,
   decidedByLabel,
+  decisionMessage,
   isOverdue,
   OVERDUE_LABEL,
   reasonCategoryLabel,
   rejectionCategoryLabel,
-  REJECTED_TRANSFER_MESSAGE,
   requestedActionLabel,
   reviewActionLabel,
   riskDecisionLabel,
@@ -65,7 +64,8 @@ function isNotFound(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 404 || error.status === 400);
 }
 
-type Notice = { kind: TransferDecisionKind } | { kind: RefusalKind; error: DescribedError };
+/** `done`: a decision answered `200`; its message follows the returned status (decisionMessage). */
+type Notice = { kind: 'done'; message: string } | { kind: RefusalKind; error: DescribedError };
 
 interface Loaded {
   transfer: TransferReviewDetail;
@@ -85,13 +85,13 @@ function TransferReview({ transferId }: { transferId: string }) {
   const { load, refreshing, refreshError, reload, retry, setData } = useLoad(fetcher);
   const [notice, setNotice] = useState<Notice | null>(null);
   const doneRef = useRef<HTMLParagraphElement>(null);
-  useFocusOn(doneRef, notice?.kind === 'approved' || notice?.kind === 'rejected' ? notice : null);
+  useFocusOn(doneRef, notice?.kind === 'done' ? notice : null);
 
   const onStart = useCallback(() => setNotice(null), []);
   const onDecided = useCallback(
     (result: TransferReviewDetail, decision: TransferDecisionKind) => {
       setData({ transfer: result, checkedAt: Date.now() });
-      setNotice({ kind: decision });
+      setNotice({ kind: 'done', message: decisionMessage(decision, result.status) });
     },
     [setData],
   );
@@ -149,14 +149,14 @@ function TransferReview({ transferId }: { transferId: string }) {
           overrides={STAFF_ERROR_OVERRIDES}
         />
       )}
-      {(notice?.kind === 'approved' || notice?.kind === 'rejected') && (
+      {notice?.kind === 'done' && (
         <p
           ref={doneRef}
           role="status"
           tabIndex={-1}
           className="rounded-md border border-blue-300 bg-blue-50 p-3 font-medium text-blue-950 focus:outline-2 focus:outline-offset-2 focus:outline-blue-600 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100"
         >
-          {notice.kind === 'approved' ? APPROVED_TRANSFER_MESSAGE : REJECTED_TRANSFER_MESSAGE}
+          {notice.message}
         </p>
       )}
       {(notice?.kind === 'stale' || notice?.kind === 'party') && (

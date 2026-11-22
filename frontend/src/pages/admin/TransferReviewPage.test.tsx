@@ -18,6 +18,7 @@ import {
 } from '../../test/transferReviewFixtures';
 import {
   APPROVE_TRANSFER_WARNING,
+  APPROVAL_REJECTED_MESSAGE,
   APPROVED_TRANSFER_MESSAGE,
   REJECT_TRANSFER_REASON_FORMAT_HINT,
   REJECT_TRANSFER_REASON_HINT,
@@ -316,6 +317,27 @@ describe('Approve', () => {
     expect(posts[0]!.headers.has('Idempotency-Key')).toBe(false);
     expect(posts[0]!.body).toBeUndefined();
     expect(http.callsTo('GET', DETAIL)).toHaveLength(1);
+  });
+
+  it('says the approval ended in a rejection when a wallet is frozen or closed (case 3)', async () => {
+    const user = userEvent.setup();
+    setup({
+      [`GET ${DETAIL}`]: () => jsonResponse(200, PENDING_REVIEW_DETAIL),
+      [`POST ${APPROVE}`]: () =>
+        jsonResponse(200, {
+          ...REJECTED_REVIEW_DETAIL,
+          rejectionReasonCategory: 'WALLET_UNAVAILABLE',
+          ledgerStatus: null,
+        }),
+    });
+    renderRoute(PAGE);
+
+    await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(screen.getByRole('button', { name: CONFIRM_APPROVE }));
+
+    expect(await screen.findByText(APPROVAL_REJECTED_MESSAGE)).toHaveFocus();
+    expect(screen.queryByText(APPROVED_TRANSFER_MESSAGE)).not.toBeInTheDocument();
+    expect(value('Status', 'Transfer')).toHaveTextContent('Rejected');
   });
 
   it('renders ledgerStatus from the answer, not from the status', async () => {

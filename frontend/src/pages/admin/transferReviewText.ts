@@ -103,6 +103,30 @@ export const REJECT_TRANSFER_WARNING =
   'Rejecting ends this transfer. The held amount returns to the sender, and the recipient receives nothing.';
 export const REJECTED_TRANSFER_MESSAGE =
   'Transfer rejected. The held amount has returned to the sender.';
+/** Approve answered `200 REJECTED` (`WALLET_UNAVAILABLE`, MVP-ADR-24 case 3). */
+export const APPROVAL_REJECTED_MESSAGE =
+  'Not approved: a wallet is frozen or closed, so the transfer was rejected instead and the held amount has returned to the sender. The recipient received nothing.';
+/** A `200` with any other status: state only what the answer shows. */
+export const DECISION_RECORDED_MESSAGE =
+  'The decision was recorded. The transfer status is shown below.';
+
+/**
+ * The notice after a `200`, chosen from the status the server returned, never from the action
+ * alone: an approval can end `REJECTED` when a wallet is frozen or closed (security and code
+ * review, PR 6b step 11).
+ */
+export function decisionMessage(
+  decision: 'approved' | 'rejected',
+  status: string | undefined,
+): string {
+  if (decision === 'approved' && status === 'COMPLETED') {
+    return APPROVED_TRANSFER_MESSAGE;
+  }
+  if (status === 'REJECTED') {
+    return decision === 'approved' ? APPROVAL_REJECTED_MESSAGE : REJECTED_TRANSFER_MESSAGE;
+  }
+  return DECISION_RECORDED_MESSAGE;
+}
 
 /**
  * Java's String.strip(): Character.isWhitespace, which is the Unicode space separators except the

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APPROVAL_REJECTED_MESSAGE,
+  APPROVED_TRANSFER_MESSAGE,
+  DECISION_RECORDED_MESSAGE,
+  decisionMessage,
+  REJECTED_TRANSFER_MESSAGE,
   decidedByLabel,
   isOverdue,
   reasonCategoryLabel,
@@ -96,5 +101,15 @@ describe('rejectTransferReasonError (TextRules.requireReason)', () => {
     ['digits only', '42'],
   ])('accepts %s, as the server would', (_name, reason) => {
     expect(rejectTransferReasonError(reason)).toBeUndefined();
+  });
+});
+
+describe('decisionMessage', () => {
+  it('follows the returned status, not the action alone', () => {
+    expect(decisionMessage('approved', 'COMPLETED')).toBe(APPROVED_TRANSFER_MESSAGE);
+    expect(decisionMessage('approved', 'REJECTED')).toBe(APPROVAL_REJECTED_MESSAGE);
+    expect(decisionMessage('rejected', 'REJECTED')).toBe(REJECTED_TRANSFER_MESSAGE);
+    expect(decisionMessage('approved', 'EXPIRED')).toBe(DECISION_RECORDED_MESSAGE);
+    expect(decisionMessage('rejected', undefined)).toBe(DECISION_RECORDED_MESSAGE);
   });
 });
