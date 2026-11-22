@@ -1,0 +1,10 @@
+# Gitleaks false positives, one fingerprint per line (commit:file:rule:line). Every entry needs a
+# reason; never add a real secret here, rotate it instead.
+#
+# PR 6a (2026-11-22): test constants named KEY holding made-up UUIDs used as Idempotency-Key
+# header values in fetch stubs, not credentials (rule generic-api-key). Renamed to IDEM_UUID in the
+# step 7 fix commit, so later commits do not match; these fingerprints cover the earlier commits of
+# the feature/pr6a-customer-web branch that the full-history scan still reads.
+643631be629a1b490fffcd27aac0e40a280a5e0d:frontend/src/api/client.test.ts:generic-api-key:106
+32c0c7e2a40713288907d35ea12b1ef7038a9ed9:frontend/src/api/wallet.test.ts:generic-api-key:8
+c99011e1f6311ea7bc1a6213f6136cac0766e64c:frontend/src/api/transfers.test.ts:generic-api-key:25

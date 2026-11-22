@@ -86,6 +86,7 @@ class KycReviewFlowIT extends AdminFlowSupport {
 
     JsonNode status = body(getAs(STATUS, customer.token()));
     assertThat(status.get("status").asString()).isEqualTo("APPROVED");
+    assertThat(status.get("applicationId").asString()).isEqualTo(application.toString());
     assertThat(status.get("walletCreated").asBoolean()).isTrue();
   }
 

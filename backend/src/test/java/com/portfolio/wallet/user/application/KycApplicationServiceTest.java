@@ -270,7 +270,7 @@ class KycApplicationServiceTest {
   void statusWithoutAnApplicationIsNone() {
     when(applications.findCurrent(CUSTOMER)).thenReturn(Optional.empty());
 
-    assertThat(service.status(CUSTOMER)).isEqualTo(new KycStatusView("NONE", null, false));
+    assertThat(service.status(CUSTOMER)).isEqualTo(new KycStatusView("NONE", null, null, false));
   }
 
   @Test
@@ -279,7 +279,7 @@ class KycApplicationServiceTest {
     when(wallets.exists(CUSTOMER)).thenReturn(true);
 
     assertThat(service.status(CUSTOMER))
-        .isEqualTo(new KycStatusView("PENDING_REVIEW", "FULL", true));
+        .isEqualTo(new KycStatusView("PENDING_REVIEW", APPLICATION, "FULL", true));
   }
 
   @Test

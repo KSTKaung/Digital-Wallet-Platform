@@ -146,8 +146,10 @@ public class KycApplicationService {
     boolean walletCreated = wallets.exists(customerId);
     return applications
         .findCurrent(customerId)
-        .map(row -> new KycStatusView(row.status(), row.verificationLevel(), walletCreated))
-        .orElseGet(() -> new KycStatusView(KycStatusView.NONE, null, walletCreated));
+        .map(
+            row ->
+                new KycStatusView(row.status(), row.id(), row.verificationLevel(), walletCreated))
+        .orElseGet(() -> new KycStatusView(KycStatusView.NONE, null, null, walletCreated));
   }
 
   /**
