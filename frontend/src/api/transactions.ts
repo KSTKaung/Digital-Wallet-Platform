@@ -6,7 +6,7 @@ import { pageQueryString, type PageQuery } from './paging';
 import type { ResponseBodyOf } from './types';
 
 export type TransactionPage = ResponseBodyOf<'/api/v1/transactions', 'get'>;
-export type Transaction = NonNullable<TransactionPage['items']>[number];
+export type Transaction = TransactionPage['items'][number];
 
 /** The documented item types; anything else is shown as sent. */
 export const TRANSACTION_TYPES = ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT'] as const;

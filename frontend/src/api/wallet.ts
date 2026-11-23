@@ -9,8 +9,8 @@ export type Wallet = ResponseBodyOf<'/api/v1/wallet', 'get'>;
 export type WalletLimits = ResponseBodyOf<'/api/v1/wallet/limits', 'get'>;
 export type WalletStatusResult = ResponseBodyOf<'/api/v1/wallet/freeze', 'post'>;
 /** `201` body of a deposit or a withdrawal; `reference` is the server's `DEP-…` / `WDR-…`. */
-export type MoneyMovement = ResponseBodyOf<'/api/v1/wallet/deposits', 'post', 201>;
-export type WithdrawalMovement = ResponseBodyOf<'/api/v1/wallet/withdrawals', 'post', 201>;
+export type MoneyMovement = ResponseBodyOf<'/api/v1/wallet/deposits', 'post'>;
+export type WithdrawalMovement = ResponseBodyOf<'/api/v1/wallet/withdrawals', 'post'>;
 /** `{maskedName, maskedWalletNumber}` of a recipient (doc 02 §2.3, MVP-ADR-20). */
 export type WalletLookup = ResponseBodyOf<'/api/v1/wallets/lookup', 'get'>;
 
@@ -21,7 +21,8 @@ type WithdrawalBody = RequestBodyOf<'/api/v1/wallet/withdrawals', 'post'>;
  * The schema types `amount` as a JSON number. It is passed here as canonical decimal text (from
  * checkAmount) and written into the JSON as a number literal unchanged, so the server's
  * BigDecimal receives exactly the typed value: no float conversion, never 0.30000000000000004.
- * `fundingSource` is left out: the MVP refuses any value (doc 02 §2.3).
+ * `fundingSource` is left out: the MVP refuses any value (doc 02 §2.3). Both are why these two
+ * request types stay local instead of the generated ones.
  */
 export type DepositRequest = Omit<DepositBody, 'amount' | 'fundingSource'> & { amount: string };
 export type WithdrawalRequest = Omit<WithdrawalBody, 'amount'> & { amount: string };

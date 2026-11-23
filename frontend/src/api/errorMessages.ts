@@ -22,10 +22,18 @@ export const NETWORK_ERROR_MESSAGE =
 export const LOGIN_FAILED_MESSAGE =
   'Email or password is incorrect, or the account is temporarily locked. Check your details or try again later.';
 
+/**
+ * reset-password refused the reset token (`400 INVALID_RESET_TOKEN`: unknown, expired, used or
+ * superseded; doc 06 MVP-ADR-19 amendment, doc 02 §2.1).
+ */
+export const RESET_EXPIRED_MESSAGE =
+  'This password reset has expired or was already used. Start again to get a new code.';
+
 const MESSAGES: Readonly<Record<string, string>> = {
   // Authentication (no doc 05 §5.3 entry; wording follows doc 05 §3.2 F-AUTH and MVP-ADR-23).
   INVALID_OTP:
     'The code is wrong or has expired. Check the latest email we sent, or request a new code.',
+  INVALID_RESET_TOKEN: RESET_EXPIRED_MESSAGE,
   OTP_EXPIRED: 'The code has expired. Request a new code.',
   OTP_ATTEMPTS_EXCEEDED: 'Too many wrong codes. Request a new code.',
   VERIFICATION_ATTEMPTS_EXCEEDED: 'Too many attempts.',
