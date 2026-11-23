@@ -1,5 +1,6 @@
 package com.portfolio.wallet.wallet.web;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Null;
 import jakarta.validation.constraints.Pattern;
@@ -32,7 +33,9 @@ record DepositRequest(
             regexp = RequestText.HAS_LETTER_OR_DIGIT,
             message = RequestText.HAS_LETTER_OR_DIGIT_MESSAGE)
         String reference,
-    @Null(message = "is not supported") Object fundingSource) {
+    @Schema(description = "Not supported: any value other than null is a 400 VALIDATION_ERROR")
+        @Null(message = "is not supported")
+        Object fundingSource) {
 
   @Override
   public String toString() {

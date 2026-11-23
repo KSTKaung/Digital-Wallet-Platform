@@ -45,6 +45,10 @@ public class PasswordService {
   private static final String ACTION_RESET = "PASSWORD_RESET";
   private static final String ACTION_CHANGE = "PASSWORD_CHANGE";
   private static final String REASON_INVALID_TOKEN = "INVALID_TOKEN";
+
+  /** The one message for every unusable reset token (E3: unchanged from VALIDATION_ERROR). */
+  static final String INVALID_TOKEN_MESSAGE = "Invalid or expired reset token";
+
   private static final String REASON_LENGTH = "POLICY_LENGTH";
   private static final String REASON_REUSED = "POLICY_REUSED";
   private static final String REASON_WRONG_CURRENT = "WRONG_CURRENT";
@@ -331,7 +335,7 @@ public class PasswordService {
                 clientIp)
             : resetEntry(account, AuditResult.FAILURE, REASON_INVALID_TOKEN, clientIp);
     audit.recordIndependently(entry);
-    return new ApiException(ErrorCode.VALIDATION_ERROR, "Invalid or expired reset token");
+    return new ApiException(ErrorCode.INVALID_RESET_TOKEN, INVALID_TOKEN_MESSAGE);
   }
 
   private static AuditEntry resetEntry(

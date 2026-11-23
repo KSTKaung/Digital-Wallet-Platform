@@ -2,8 +2,15 @@ package com.portfolio.wallet.admin.web;
 
 import com.portfolio.wallet.admin.application.TransferReviewPage;
 import com.portfolio.wallet.admin.application.TransferReviewService;
+import com.portfolio.wallet.common.error.ErrorCode;
+import com.portfolio.wallet.common.web.ApiError;
+import com.portfolio.wallet.common.web.OpenApiDocumentation;
 import com.portfolio.wallet.common.web.PageResponse;
 import com.portfolio.wallet.transfer.application.TransferReviewQueryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -44,10 +51,21 @@ import org.springframework.web.bind.annotation.RestController;
  * 415 UNSUPPORTED_MEDIA_TYPE}, by the global JSON handling, also after the deadline. Such a request
  * expires nothing; the transfer stays held until a valid action or the expiry job decides it.
  */
+@Tag(name = "Admin", description = "Staff: KYC decisions, transfer reviews, wallet freeze")
+@SecurityRequirement(name = OpenApiDocumentation.BEARER)
 @RestController
 @RequestMapping("/api/v1/admin/transfer-reviews")
 @PreAuthorize("hasRole('COMPLIANCE_OFFICER')")
 public class TransferReviewController {
+
+  // OpenAPI descriptions (documentations/02 §2.7), never a request value.
+  private static final String OWN_TRANSFER = "the reviewer is the sender or the recipient";
+  private static final String NO_LONGER_HELD =
+      "no longer PENDING_REVIEW, or at or after the deadline: the transfer then expires and the"
+          + " hold is released";
+  private static final String DECIDED =
+      "The detail as committed. An approval that finds a frozen or closed wallet rejects the"
+          + " transfer (status REJECTED, rejectionReasonCategory WALLET_UNAVAILABLE).";
 
   private final TransferReviewService reviews;
 
@@ -55,6 +73,10 @@ public class TransferReviewController {
     this.reviews = reviews;
   }
 
+  @Operation(
+      operationId = "listTransferReviews",
+      summary = "List the transfers held for review",
+      description = "PENDING_REVIEW only, soonest deadline first, then by id.")
   @GetMapping
   PageResponse<TransferReviewSummaryResponse> queue(
       @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -69,11 +91,19 @@ public class TransferReviewController {
         result.totalPages());
   }
 
+  @Operation(
+      operationId = "getTransferReview",
+      summary = "Get a transfer that was held for review",
+      description = "A transfer that was never held is the same 404 as a missing id.")
   @GetMapping("/{transferId}")
   TransferReviewDetailResponse get(@PathVariable UUID transferId) {
     return TransferReviewDetailResponse.from(reviews.get(transferId));
   }
 
+  @Operation(operationId = "approveTransferReview", summary = "Approve a held transfer")
+  @ApiResponse(responseCode = "200", description = DECIDED)
+  @ApiError(code = ErrorCode.FORBIDDEN, when = OWN_TRANSFER)
+  @ApiError(code = ErrorCode.INVALID_TRANSFER_STATE, when = NO_LONGER_HELD)
   @PostMapping("/{transferId}/approve")
   TransferReviewDetailResponse approve(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID transferId, HttpServletRequest request) {
@@ -81,11 +111,27 @@ public class TransferReviewController {
         reviews.approve(reviewer(jwt), transferId, RequestText.clientIp(request)));
   }
 
+  @Operation(operationId = "rejectTransferReview", summary = "Reject a held transfer")
+  @ApiResponse(responseCode = "200", description = DECIDED)
+  @ApiError(
+      code = ErrorCode.VALIDATION_ERROR,
+      when =
+          "before the deadline only: a missing, blank or invalid reason, or no body (after it, any"
+              + " reject is the 409)")
+  @ApiError(code = ErrorCode.FORBIDDEN, when = OWN_TRANSFER)
+  @ApiError(code = ErrorCode.INVALID_TRANSFER_STATE, when = NO_LONGER_HELD + ", whatever the body")
   @PostMapping("/{transferId}/reject")
   TransferReviewDetailResponse reject(
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID transferId,
-      @RequestBody(required = false) RejectTransferRequest body,
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+              required = true,
+              description =
+                  "Required with a reason before the deadline. The server reads the body as"
+                      + " optional only so that a late rejection expires the transfer whatever it"
+                      + " holds.")
+          @RequestBody(required = false)
+          RejectTransferRequest body,
       HttpServletRequest request) {
     return TransferReviewDetailResponse.from(
         reviews.reject(

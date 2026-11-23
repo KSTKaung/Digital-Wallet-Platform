@@ -1,6 +1,7 @@
 package com.portfolio.wallet.admin.web;
 
 import com.portfolio.wallet.user.application.KycReviewDetail;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -22,10 +23,11 @@ record KycReviewDetailResponse(
     String lastName,
     LocalDate dateOfBirth,
     String countryCode,
-    UUID reviewerId,
-    String rejectionReason,
+    @Schema(nullable = true, description = "The deciding officer; null until decided")
+        UUID reviewerId,
+    @Schema(nullable = true, description = "Null unless REJECTED") String rejectionReason,
     Instant submittedAt,
-    Instant decidedAt,
+    @Schema(nullable = true, description = "Null until decided") Instant decidedAt,
     Instant createdAt,
     Instant updatedAt) {
 

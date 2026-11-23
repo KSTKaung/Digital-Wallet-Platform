@@ -1,6 +1,7 @@
 package com.portfolio.wallet.admin.web;
 
 import com.portfolio.wallet.admin.application.TransferReviewDetail;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -20,9 +21,13 @@ record TransferReviewDetailResponse(
     Instant createdAt,
     Instant heldAt,
     Instant reviewExpiresAt,
-    Instant decidedAt,
-    String rejectionReasonCategory,
-    String ledgerStatus,
+    @Schema(nullable = true, description = "Null while PENDING_REVIEW") Instant decidedAt,
+    @Schema(
+            nullable = true,
+            description = "REVIEW_DECLINED or WALLET_UNAVAILABLE for REJECTED, otherwise null")
+        String rejectionReasonCategory,
+    @Schema(nullable = true, description = "POSTED for COMPLETED, otherwise null")
+        String ledgerStatus,
     Risk risk,
     Party sender,
     Party recipient,
@@ -30,7 +35,13 @@ record TransferReviewDetailResponse(
 
   record Risk(int score, String decision, Instant assessedAt, List<RuleHit> rules) {}
 
-  record RuleHit(String code, int weight) {}
+  record RuleHit(
+      @Schema(
+              description =
+                  "TRANSFER_AMOUNT, TRANSFER_FREQUENCY, NEW_RECIPIENT or NEW_SENDER_WALLET"
+                      + " (documentations/06 MVP-ADR-24)")
+          String code,
+      int weight) {}
 
   record Party(UUID customerId, String firstName, String lastName, String maskedWalletNumber) {
 
@@ -41,13 +52,18 @@ record TransferReviewDetailResponse(
   }
 
   record History(
-      String action,
-      String decidedBy,
-      String requestedAction,
-      UUID actorUserId,
-      String reasonCategory,
-      String reason,
-      String systemReason,
+      @Schema(description = "APPROVE, REJECT, CANCEL or EXPIRE") String action,
+      @Schema(description = "STAFF, CUSTOMER or SYSTEM") String decidedBy,
+      @Schema(nullable = true, description = "Null for an expiry by the scheduled job")
+          String requestedAction,
+      @Schema(nullable = true, description = "Null for an expiry by the scheduled job")
+          UUID actorUserId,
+      @Schema(nullable = true, description = "STAFF_REJECTION for a staff rejection, else null")
+          String reasonCategory,
+      @Schema(nullable = true, description = "The reviewer's text for a staff rejection, else null")
+          String reason,
+      @Schema(nullable = true, description = "The system reason when the system decided, else null")
+          String systemReason,
       Instant recordedAt) {
 
     @Override

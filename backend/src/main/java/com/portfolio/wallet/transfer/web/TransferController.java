@@ -1,6 +1,9 @@
 package com.portfolio.wallet.transfer.web;
 
+import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.security.ClientAddresses;
+import com.portfolio.wallet.common.web.ApiError;
+import com.portfolio.wallet.common.web.OpenApiDocumentation;
 import com.portfolio.wallet.common.web.PageResponse;
 import com.portfolio.wallet.transfer.application.TransferCancellationService;
 import com.portfolio.wallet.transfer.application.TransferCommand;
@@ -8,6 +11,11 @@ import com.portfolio.wallet.transfer.application.TransferPage;
 import com.portfolio.wallet.transfer.application.TransferQueryService;
 import com.portfolio.wallet.transfer.application.TransferService;
 import com.portfolio.wallet.transfer.application.TransferStatusView;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -42,10 +50,17 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>the three reads apply the one visibility rule of Q8.
  * </ul>
  */
+@Tag(name = "Transfer", description = "Transfers between customers' wallets")
+@SecurityRequirement(name = OpenApiDocumentation.BEARER)
 @RestController
 @RequestMapping("/api/v1/transfers")
 @PreAuthorize("hasRole('CUSTOMER')")
 public class TransferController {
+
+  // OpenAPI descriptions (documentations/02 §2.4), never a request value.
+  private static final String ONLY_WHILE_HELD =
+      "not PENDING_REVIEW, or at or after reviewExpiresAt: the transfer then expires, the hold is"
+          + " released and nothing else changes";
 
   private final TransferService transfers;
   private final TransferCancellationService cancellations;
@@ -60,6 +75,46 @@ public class TransferController {
     this.queries = queries;
   }
 
+  @Operation(operationId = "createTransfer", summary = "Transfer to another customer's wallet")
+  @ApiResponse(
+      responseCode = "201",
+      description =
+          "COMPLETED (posted, ledgerStatus POSTED) or PENDING_REVIEW (the amount is held until"
+              + " reviewExpiresAt). A replay with the same Idempotency-Key and request returns the"
+              + " creation-time answer.")
+  @ApiError(
+      code = ErrorCode.INVALID_AMOUNT,
+      when = "zero or negative, more than 2 decimals, too many digits, or below the minimum")
+  @ApiError(code = ErrorCode.CURRENCY_MISMATCH, when = "a currency other than THB")
+  @ApiError(code = ErrorCode.KYC_REQUIRED, when = "no wallet yet: KYC is not approved")
+  @ApiError(
+      code = ErrorCode.RISK_BLOCKED,
+      when = "the risk assessment blocked the transfer; it is recorded as BLOCKED")
+  @ApiError(
+      code = ErrorCode.NOT_FOUND,
+      when =
+          "a missing, frozen or closed recipient wallet, a wrong check digit, or the caller's own"
+              + " wallet when it is not ACTIVE; identical in every case")
+  @ApiError(
+      code = ErrorCode.SELF_TRANSFER,
+      when = "the recipient is the caller's own ACTIVE wallet")
+  @ApiError(
+      code = ErrorCode.IDEMPOTENCY_KEY_REUSED,
+      when =
+          "the Idempotency-Key was used with a different request; a stored refusal is replayed"
+              + " with its own code")
+  @ApiError(code = ErrorCode.WALLET_FROZEN, when = "the sender's wallet is frozen")
+  @ApiError(code = ErrorCode.SINGLE_LIMIT_EXCEEDED, when = "above the per-transaction maximum")
+  @ApiError(
+      code = ErrorCode.DAILY_LIMIT_EXCEEDED,
+      when = "used plus reserved amounts over the tier's daily limit (Asia/Bangkok day)")
+  @ApiError(
+      code = ErrorCode.INSUFFICIENT_BALANCE,
+      when = "the available balance is lower than the amount")
+  @ApiError(
+      code = ErrorCode.RATE_LIMITED,
+      when = "the caller is over a wallet-lookup window, whatever the recipient")
+  @ApiError(code = ErrorCode.SYSTEM_ERROR, when = "the risk evaluation failed; nothing moved")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   TransferResponse create(
@@ -81,6 +136,10 @@ public class TransferController {
   }
 
   /** Newest first, size 1–100 (doc 02 §1.5). */
+  @Operation(
+      operationId = "listTransfers",
+      summary = "List the caller's transfers",
+      description = "The sender sees every status, the receiver only COMPLETED.")
   @GetMapping
   PageResponse<TransferResponse> list(
       @AuthenticationPrincipal Jwt jwt,
@@ -96,12 +155,20 @@ public class TransferController {
         result.totalPages());
   }
 
+  @Operation(
+      operationId = "getTransfer",
+      summary = "Get one of the caller's transfers",
+      description = "A receiver sees only a COMPLETED transfer; anything else is the 404.")
   @GetMapping("/{id}")
   TransferResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
     return TransferResponse.from(queries.get(subject(jwt), id));
   }
 
   /** {@code {status, ledgerStatus}} (doc 02 §2.4). */
+  @Operation(
+      operationId = "getTransferStatus",
+      summary = "Get a transfer's status",
+      description = "The same visibility as getTransfer.")
   @GetMapping("/{id}/status")
   TransferStatusResponse status(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
     TransferStatusView view = queries.status(subject(jwt), id);
@@ -109,6 +176,12 @@ public class TransferController {
   }
 
   /** Only the sender, only while {@code PENDING_REVIEW} and before the deadline. */
+  @Operation(
+      operationId = "cancelTransfer",
+      summary = "Cancel a transfer held for review",
+      description = "Only the sender; anyone else gets the 404. No Idempotency-Key.")
+  @ApiResponse(responseCode = "200", description = "The cancelled transfer; the hold is released")
+  @ApiError(code = ErrorCode.INVALID_TRANSFER_STATE, when = ONLY_WHILE_HELD)
   @PostMapping("/{id}/cancel")
   TransferResponse cancel(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, HttpServletRequest request) {
@@ -117,7 +190,10 @@ public class TransferController {
   }
 
   /** {@code {status, ledgerStatus}}. */
-  record TransferStatusResponse(String status, String ledgerStatus) {}
+  record TransferStatusResponse(
+      String status,
+      @Schema(nullable = true, description = "POSTED for COMPLETED, otherwise null")
+          String ledgerStatus) {}
 
   private static UUID subject(Jwt jwt) {
     return UUID.fromString(jwt.getSubject());

@@ -225,7 +225,7 @@ class PasswordServiceTest {
 
     assertFails(
         () -> service.resetPassword(TOKEN, NEXT, null),
-        ErrorCode.VALIDATION_ERROR,
+        ErrorCode.INVALID_RESET_TOKEN,
         "Invalid or expired reset token");
 
     verify(passwords, never()).hash(any());
@@ -238,7 +238,7 @@ class PasswordServiceTest {
 
     assertFails(
         () -> service.resetPassword(TOKEN, NEXT, null),
-        ErrorCode.VALIDATION_ERROR,
+        ErrorCode.INVALID_RESET_TOKEN,
         "Invalid or expired reset token");
 
     verify(resetTokens, never()).consume(any(), any(), any());
@@ -266,7 +266,7 @@ class PasswordServiceTest {
 
     assertFails(
         () -> service.resetPassword(TOKEN, NEXT, null),
-        ErrorCode.VALIDATION_ERROR,
+        ErrorCode.INVALID_RESET_TOKEN,
         "Invalid or expired reset token");
 
     verify(credentials, never()).replacePassword(any(), any(), any(), any());
@@ -280,7 +280,7 @@ class PasswordServiceTest {
 
     assertFails(
         () -> service.resetPassword(TOKEN, NEXT, null),
-        ErrorCode.VALIDATION_ERROR,
+        ErrorCode.INVALID_RESET_TOKEN,
         "Invalid or expired reset token");
 
     verify(sessions, never()).revokeAllForUser(any(), any(), any());

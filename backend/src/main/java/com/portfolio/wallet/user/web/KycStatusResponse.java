@@ -1,6 +1,7 @@
 package com.portfolio.wallet.user.web;
 
 import com.portfolio.wallet.user.application.KycStatusView;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 
 /**
@@ -8,7 +9,10 @@ import java.util.UUID;
  * applicationId} null without one.
  */
 record KycStatusResponse(
-    String status, UUID applicationId, String verificationLevel, boolean walletCreated) {
+    @Schema(description = "NONE without an application") String status,
+    @Schema(nullable = true, description = "Null without an application") UUID applicationId,
+    @Schema(nullable = true, description = "Null without an application") String verificationLevel,
+    boolean walletCreated) {
 
   static KycStatusResponse from(KycStatusView view) {
     return new KycStatusResponse(

@@ -6,7 +6,16 @@ import com.portfolio.wallet.auth.application.PasswordService;
 import com.portfolio.wallet.auth.application.RegistrationService;
 import com.portfolio.wallet.auth.application.SessionService;
 import com.portfolio.wallet.auth.domain.OtpPurpose;
+import com.portfolio.wallet.common.error.ErrorCode;
 import com.portfolio.wallet.common.security.JwtProperties;
+import com.portfolio.wallet.common.web.ApiError;
+import com.portfolio.wallet.common.web.OpenApiDocumentation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.InetAddress;
@@ -25,7 +34,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Authentication endpoints (documentations/02 §2.1; doc 06 MVP-ADR-14, -23). */
+/**
+ * Authentication endpoints (documentations/02 §2.1; doc 06 MVP-ADR-14, -23). Public except {@code
+ * change-password} and {@code logout}. The OpenAPI annotations describe the contract only.
+ */
+@Tag(name = "Auth", description = "Registration, login, sessions and passwords")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -50,6 +63,13 @@ public class AuthController {
     this.passwords = passwords;
   }
 
+  @Operation(operationId = "registerAccount", summary = "Register a customer account")
+  @ApiResponse(
+      responseCode = "201",
+      description =
+          "Identical for a new and an existing account; a verification code is emailed to a new or"
+              + " still unverified one",
+      content = @Content(schema = @Schema(implementation = RegisterResponse.class)))
   @PostMapping("/register")
   ResponseEntity<RegisterResponse> register(
       @Valid @RequestBody RegisterRequest body, HttpServletRequest request) {
@@ -59,6 +79,17 @@ public class AuthController {
         .body(new RegisterResponse(email, STATUS_PENDING));
   }
 
+  @Operation(operationId = "verifyOtp", summary = "Verify an emailed code")
+  @ApiResponse(
+      responseCode = "200",
+      description =
+          "PASSWORD_RESET: the body holds the reset token. REGISTRATION: an empty body; the"
+              + " account is active.")
+  @ApiError(
+      code = ErrorCode.INVALID_OTP,
+      when =
+          "a wrong, expired, used-up or cancelled code, an unknown identifier, the purpose LOGIN,"
+              + " or a missing or wrong password for REGISTRATION; identical for every failure")
   @PostMapping("/verify-otp")
   ResponseEntity<ResetTokenResponse> verifyOtp(
       @Valid @RequestBody VerifyOtpRequest body, HttpServletRequest request) {
@@ -72,6 +103,12 @@ public class AuthController {
     return ResponseEntity.ok().build();
   }
 
+  @Operation(operationId = "resendOtp", summary = "Send a new code")
+  @ApiResponse(
+      responseCode = "202",
+      description =
+          "Always, also for an unknown identifier or when a limit sends nothing; PASSWORD_RESET"
+              + " behaves like forgot-password")
   @PostMapping("/resend-otp")
   ResponseEntity<Void> resendOtp(
       @Valid @RequestBody ResendOtpRequest body, HttpServletRequest request) {
@@ -83,6 +120,10 @@ public class AuthController {
     return ResponseEntity.accepted().build();
   }
 
+  @Operation(operationId = "requestPasswordReset", summary = "Email a password-reset code")
+  @ApiResponse(
+      responseCode = "202",
+      description = "Always; a code is emailed only to an account that can reset its password")
   @PostMapping("/forgot-password")
   ResponseEntity<Void> forgotPassword(
       @Valid @RequestBody ForgotPasswordRequest body, HttpServletRequest request) {
@@ -90,6 +131,16 @@ public class AuthController {
     return ResponseEntity.accepted().build();
   }
 
+  @Operation(operationId = "resetPassword", summary = "Set a new password with a reset token")
+  @ApiResponse(responseCode = "200", description = "The password is reset; every session ends")
+  @ApiError(
+      code = ErrorCode.INVALID_RESET_TOKEN,
+      when =
+          "an unknown, expired or already used reset token, or one whose account can no longer"
+              + " reset; the message is \"Invalid or expired reset token\"")
+  @ApiError(
+      code = ErrorCode.VALIDATION_ERROR,
+      when = "newPassword outside the length policy, or a recent password repeated")
   @PostMapping("/reset-password")
   ResponseEntity<Void> resetPassword(
       @Valid @RequestBody ResetPasswordRequest body, HttpServletRequest request) {
@@ -98,6 +149,15 @@ public class AuthController {
   }
 
   // Every session is revoked, the caller's too, so its refresh cookie goes as well.
+  @Operation(operationId = "changePassword", summary = "Change the caller's password")
+  @SecurityRequirement(name = OpenApiDocumentation.BEARER)
+  @ApiResponse(
+      responseCode = "200",
+      description = "Changed; every session ends, this one too, and the refresh cookie is cleared")
+  @ApiError(
+      code = ErrorCode.VALIDATION_ERROR,
+      when = "newPassword outside the length policy, or a recent password repeated")
+  @ApiError(code = ErrorCode.UNAUTHORIZED, when = "also a wrong current password")
   @PostMapping("/change-password")
   ResponseEntity<Void> changePassword(
       @AuthenticationPrincipal Jwt jwt,
@@ -113,6 +173,13 @@ public class AuthController {
         .build();
   }
 
+  @Operation(operationId = "loginUser", summary = "Log in with email and password")
+  @ApiResponse(
+      responseCode = "200",
+      description = "The access token; the refresh token is set in an HttpOnly cookie")
+  @ApiError(
+      code = ErrorCode.UNAUTHORIZED,
+      when = "a wrong password, an unknown account or a locked account; identical for all three")
   @PostMapping("/login")
   ResponseEntity<TokenResponse> login(
       @Valid @RequestBody LoginRequest body, HttpServletRequest request) {
@@ -120,6 +187,19 @@ public class AuthController {
   }
 
   // The cookie is optional here so that a missing one is the generic 401, not a validation error.
+  @Operation(
+      operationId = "refreshAccessToken",
+      summary = "Get a new access token with the refresh cookie",
+      description = "Requires the X-Requested-With header and an Origin on the allow-list.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "A new access token; the refresh cookie is rotated")
+  @ApiError(
+      code = ErrorCode.UNAUTHORIZED,
+      when = "a missing, invalid, expired, revoked or reused refresh token, or an ended session")
+  @ApiError(
+      code = ErrorCode.FORBIDDEN,
+      when = "no X-Requested-With header, or an Origin that is missing or not allowed")
   @PostMapping("/refresh")
   ResponseEntity<TokenResponse> refresh(
       @CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken,
@@ -127,6 +207,15 @@ public class AuthController {
     return withTokens(sessions.refresh(refreshToken, clientIp(request)));
   }
 
+  @Operation(
+      operationId = "logoutUser",
+      summary = "End the caller's session",
+      description = "Requires the X-Requested-With header and an Origin on the allow-list.")
+  @SecurityRequirement(name = OpenApiDocumentation.BEARER)
+  @ApiResponse(responseCode = "204", description = "Signed out; the refresh cookie is cleared")
+  @ApiError(
+      code = ErrorCode.FORBIDDEN,
+      when = "no X-Requested-With header, or an Origin that is missing or not allowed")
   @PostMapping("/logout")
   ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
     sessions.logout(

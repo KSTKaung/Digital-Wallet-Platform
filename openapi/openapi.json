@@ -1,0 +1,4970 @@
+{
+  "components" : {
+    "schemas" : {
+      "ApiErrorResponse" : {
+        "properties" : {
+          "correlationId" : {
+            "description" : "The request's correlation id (X-Correlation-Id)",
+            "type" : [ "string", "null" ]
+          },
+          "errorCode" : {
+            "description" : "The error code (documentations/02 §1.7, doc 06 MVP-ADR-19)",
+            "type" : "string"
+          },
+          "message" : {
+            "description" : "A generic message; never a secret, a token or a rejected value",
+            "type" : "string"
+          },
+          "success" : {
+            "description" : "Always false",
+            "type" : "boolean"
+          },
+          "timestamp" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "correlationId", "errorCode", "message", "success", "timestamp" ],
+        "type" : "object"
+      },
+      "ChangePasswordRequest" : {
+        "properties" : {
+          "currentPassword" : {
+            "pattern" : "[^\\p{Cs}]*",
+            "type" : "string"
+          },
+          "newPassword" : {
+            "pattern" : "[^\\p{Cs}]*",
+            "type" : "string"
+          }
+        },
+        "required" : [ "currentPassword", "newPassword" ],
+        "type" : "object"
+      },
+      "Counterparty" : {
+        "properties" : {
+          "maskedName" : {
+            "type" : "string"
+          },
+          "maskedWalletNumber" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "maskedName", "maskedWalletNumber" ],
+        "type" : "object"
+      },
+      "CreateTransferRequest" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "receiverWalletNumber" : {
+            "pattern" : "[0-9]{11}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "currency", "receiverWalletNumber" ],
+        "type" : "object"
+      },
+      "CustomerProfileResponse" : {
+        "properties" : {
+          "countryCode" : {
+            "description" : "ISO 3166-1 alpha-2; null until set",
+            "type" : [ "string", "null" ]
+          },
+          "dateOfBirth" : {
+            "description" : "Null until set",
+            "format" : "date",
+            "type" : [ "string", "null" ]
+          },
+          "email" : {
+            "description" : "Masked",
+            "type" : "string"
+          },
+          "firstName" : {
+            "description" : "The legal name; null until a KYC approval",
+            "type" : [ "string", "null" ]
+          },
+          "lastName" : {
+            "description" : "The legal name; null until a KYC approval",
+            "type" : [ "string", "null" ]
+          },
+          "phoneNumber" : {
+            "description" : "Masked; null for an account without a phone number",
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "countryCode", "dateOfBirth", "email", "firstName", "lastName", "phoneNumber" ],
+        "type" : "object"
+      },
+      "CustomerWalletStatusResponse" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ],
+        "type" : "object"
+      },
+      "DepositRequest" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "fundingSource" : {
+            "description" : "Not supported: any value other than null is a 400 VALIDATION_ERROR"
+          },
+          "reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "currency" ],
+        "type" : "object"
+      },
+      "ForgotPasswordRequest" : {
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cs}]*",
+            "type" : "string"
+          }
+        },
+        "required" : [ "email" ],
+        "type" : "object"
+      },
+      "History" : {
+        "properties" : {
+          "action" : {
+            "description" : "APPROVE, REJECT, CANCEL or EXPIRE",
+            "type" : "string"
+          },
+          "actorUserId" : {
+            "description" : "Null for an expiry by the scheduled job",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "decidedBy" : {
+            "description" : "STAFF, CUSTOMER or SYSTEM",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "The reviewer's text for a staff rejection, else null",
+            "type" : [ "string", "null" ]
+          },
+          "reasonCategory" : {
+            "description" : "STAFF_REJECTION for a staff rejection, else null",
+            "type" : [ "string", "null" ]
+          },
+          "recordedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedAction" : {
+            "description" : "Null for an expiry by the scheduled job",
+            "type" : [ "string", "null" ]
+          },
+          "systemReason" : {
+            "description" : "The system reason when the system decided, else null",
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "action", "actorUserId", "decidedBy", "reason", "reasonCategory", "recordedAt", "requestedAction", "systemReason" ],
+        "type" : "object"
+      },
+      "KycApplicationRequest" : {
+        "properties" : {
+          "documentReference" : {
+            "maxLength" : 50,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cs}\\p{Cf}]*",
+            "type" : "string"
+          },
+          "documentType" : {
+            "minLength" : 1,
+            "pattern" : "ID_CARD|PASSPORT",
+            "type" : "string"
+          },
+          "firstName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "lastName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "verificationLevel" : {
+            "minLength" : 1,
+            "pattern" : "BASIC|FULL",
+            "type" : "string"
+          }
+        },
+        "required" : [ "documentReference", "documentType", "firstName", "lastName", "verificationLevel" ],
+        "type" : "object"
+      },
+      "KycApplicationResponse" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "description" : "Null until approved or rejected",
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "documentReference" : {
+            "type" : "string"
+          },
+          "documentType" : {
+            "type" : "string"
+          },
+          "firstName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "rejectionReason" : {
+            "description" : "The reviewer's reason; null unless REJECTED",
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "submittedAt" : {
+            "description" : "Null while DRAFT",
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "verificationLevel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "createdAt", "decidedAt", "documentReference", "documentType", "firstName", "id", "lastName", "rejectionReason", "status", "submittedAt", "updatedAt", "verificationLevel" ],
+        "type" : "object"
+      },
+      "KycReviewDetailResponse" : {
+        "properties" : {
+          "countryCode" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "customerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "dateOfBirth" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "description" : "Null until decided",
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "documentReference" : {
+            "type" : "string"
+          },
+          "documentType" : {
+            "type" : "string"
+          },
+          "firstName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "rejectionReason" : {
+            "description" : "Null unless REJECTED",
+            "type" : [ "string", "null" ]
+          },
+          "reviewerId" : {
+            "description" : "The deciding officer; null until decided",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "submittedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "verificationLevel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "countryCode", "createdAt", "customerId", "dateOfBirth", "decidedAt", "documentReference", "documentType", "firstName", "id", "lastName", "rejectionReason", "reviewerId", "status", "submittedAt", "updatedAt", "verificationLevel" ],
+        "type" : "object"
+      },
+      "KycReviewSummaryResponse" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "customerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "description" : "Null until decided",
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "documentReference" : {
+            "type" : "string"
+          },
+          "documentType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maskedName" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "submittedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "verificationLevel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "createdAt", "customerId", "decidedAt", "documentReference", "documentType", "id", "maskedName", "status", "submittedAt", "verificationLevel" ],
+        "type" : "object"
+      },
+      "KycStatusResponse" : {
+        "properties" : {
+          "applicationId" : {
+            "description" : "Null without an application",
+            "format" : "uuid",
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "description" : "NONE without an application",
+            "type" : "string"
+          },
+          "verificationLevel" : {
+            "description" : "Null without an application",
+            "type" : [ "string", "null" ]
+          },
+          "walletCreated" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "applicationId", "status", "verificationLevel", "walletCreated" ],
+        "type" : "object"
+      },
+      "LoginRequest" : {
+        "properties" : {
+          "email" : {
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cs}]*",
+            "type" : "string"
+          },
+          "password" : {
+            "pattern" : "[^\\p{Cs}]*",
+            "type" : "string"
+          }
+        },
+        "required" : [ "email", "password" ],
+        "type" : "object"
+      },
+      "MoneyMovementResponse" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ledgerStatus" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "walletNumber" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "id", "ledgerStatus", "reference", "status", "walletNumber" ],
+        "type" : "object"
+      },
+      "PageInfo" : {
+        "properties" : {
+          "page" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "size" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalElements" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "page", "size", "totalElements", "totalPages" ],
+        "type" : "object"
+      },
+      "PageResponseKycReviewSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/KycReviewSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageInfo"
+          }
+        },
+        "required" : [ "items", "page" ],
+        "type" : "object"
+      },
+      "PageResponseTransactionResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TransactionResponse"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageInfo"
+          }
+        },
+        "required" : [ "items", "page" ],
+        "type" : "object"
+      },
+      "PageResponseTransferResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TransferResponse"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageInfo"
+          }
+        },
+        "required" : [ "items", "page" ],
+        "type" : "object"
+      },
+      "PageResponseTransferReviewSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TransferReviewSummaryResponse"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageInfo"
+          }
+        },
+        "required" : [ "items", "page" ],
+        "type" : "object"
+      },
+      "Party" : {
+        "properties" : {
+          "customerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "maskedWalletNumber" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerId", "firstName", "lastName", "maskedWalletNumber" ],
+        "type" : "object"
+      },
+      "RegisterRequest" : {
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cs}]*",
+            "type" : "string"
+          },
+          "password" : {
+            "pattern" : "[^\\p{Cs}]*",
+            "type" : "string"
+          },
+          "phoneNumber" : {
+            "minLength" : 1,
+            "pattern" : "\\+[0-9]{8,15}",
+            "type" : "string"
+          }
+        },
+        "required" : [ "email", "password", "phoneNumber" ],
+        "type" : "object"
+      },
+      "RegisterResponse" : {
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "email", "status" ],
+        "type" : "object"
+      },
+      "RejectKycRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "RejectTransferRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Staff-only, never shown to the customer. Required before the deadline: at most 500 characters, a letter or digit, no control or format characters.",
+            "maxLength" : 500,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "ResendOtpRequest" : {
+        "properties" : {
+          "identifier" : {
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cs}]*",
+            "type" : "string"
+          },
+          "purpose" : {
+            "minLength" : 1,
+            "pattern" : "REGISTRATION|PASSWORD_RESET|LOGIN",
+            "type" : "string"
+          }
+        },
+        "required" : [ "identifier", "purpose" ],
+        "type" : "object"
+      },
+      "ResetPasswordRequest" : {
+        "properties" : {
+          "newPassword" : {
+            "pattern" : "[^\\p{Cs}]*",
+            "type" : "string"
+          },
+          "resetToken" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "newPassword", "resetToken" ],
+        "type" : "object"
+      },
+      "ResetTokenResponse" : {
+        "properties" : {
+          "resetToken" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "resetToken" ],
+        "type" : "object"
+      },
+      "Risk" : {
+        "properties" : {
+          "assessedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decision" : {
+            "type" : "string"
+          },
+          "rules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RuleHit"
+            },
+            "type" : "array"
+          },
+          "score" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "assessedAt", "decision", "rules", "score" ],
+        "type" : "object"
+      },
+      "RuleHit" : {
+        "properties" : {
+          "code" : {
+            "description" : "TRANSFER_AMOUNT, TRANSFER_FREQUENCY, NEW_RECIPIENT or NEW_SENDER_WALLET (documentations/06 MVP-ADR-24)",
+            "type" : "string"
+          },
+          "weight" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "code", "weight" ],
+        "type" : "object"
+      },
+      "TokenResponse" : {
+        "properties" : {
+          "accessToken" : {
+            "type" : "string"
+          },
+          "expiresIn" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "accessToken", "expiresIn" ],
+        "type" : "object"
+      },
+      "TransactionResponse" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "ledgerStatus" : {
+            "type" : "string"
+          },
+          "postedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "currency", "ledgerStatus", "postedAt", "reference", "type" ],
+        "type" : "object"
+      },
+      "TransferResponse" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "counterparty" : {
+            "$ref" : "#/components/schemas/Counterparty"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ledgerStatus" : {
+            "description" : "POSTED for COMPLETED, otherwise null",
+            "type" : [ "string", "null" ]
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "rejectionReason" : {
+            "description" : "REVIEW_DECLINED or WALLET_UNAVAILABLE for REJECTED, otherwise null",
+            "type" : [ "string", "null" ]
+          },
+          "reviewExpiresAt" : {
+            "description" : "The review deadline while PENDING_REVIEW, else null",
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "counterparty", "createdAt", "currency", "direction", "id", "ledgerStatus", "reference", "rejectionReason", "reviewExpiresAt", "status" ],
+        "type" : "object"
+      },
+      "TransferReviewDetailResponse" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "decidedAt" : {
+            "description" : "Null while PENDING_REVIEW",
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "heldAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "history" : {
+            "items" : {
+              "$ref" : "#/components/schemas/History"
+            },
+            "type" : "array"
+          },
+          "ledgerStatus" : {
+            "description" : "POSTED for COMPLETED, otherwise null",
+            "type" : [ "string", "null" ]
+          },
+          "recipient" : {
+            "$ref" : "#/components/schemas/Party"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "rejectionReasonCategory" : {
+            "description" : "REVIEW_DECLINED or WALLET_UNAVAILABLE for REJECTED, otherwise null",
+            "type" : [ "string", "null" ]
+          },
+          "reviewExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "risk" : {
+            "$ref" : "#/components/schemas/Risk"
+          },
+          "sender" : {
+            "$ref" : "#/components/schemas/Party"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "transferId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "createdAt", "currency", "decidedAt", "heldAt", "history", "ledgerStatus", "recipient", "reference", "rejectionReasonCategory", "reviewExpiresAt", "risk", "sender", "status", "transferId" ],
+        "type" : "object"
+      },
+      "TransferReviewSummaryResponse" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "heldAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          },
+          "reviewExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "score" : {
+            "description" : "The risk score, 0-100; null if no assessment is found",
+            "format" : "int32",
+            "type" : [ "integer", "null" ]
+          },
+          "transferId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "currency", "heldAt", "reference", "reviewExpiresAt", "score", "transferId" ],
+        "type" : "object"
+      },
+      "TransferStatusResponse" : {
+        "properties" : {
+          "ledgerStatus" : {
+            "description" : "POSTED for COMPLETED, otherwise null",
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "ledgerStatus", "status" ],
+        "type" : "object"
+      },
+      "UpdateProfileRequest" : {
+        "properties" : {
+          "countryCode" : {
+            "minLength" : 1,
+            "pattern" : "[A-Z]{2}",
+            "type" : "string"
+          },
+          "dateOfBirth" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "countryCode", "dateOfBirth" ],
+        "type" : "object"
+      },
+      "VerifyOtpRequest" : {
+        "properties" : {
+          "identifier" : {
+            "maxLength" : 254,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cs}]*",
+            "type" : "string"
+          },
+          "otp" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "pattern" : "[^\\p{Cs}]*",
+            "type" : "string"
+          },
+          "purpose" : {
+            "minLength" : 1,
+            "pattern" : "REGISTRATION|PASSWORD_RESET|LOGIN",
+            "type" : "string"
+          }
+        },
+        "required" : [ "identifier", "otp", "purpose" ],
+        "type" : "object"
+      },
+      "WalletBalanceResponse" : {
+        "properties" : {
+          "availableBalance" : {
+            "type" : "number"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "reservedBalance" : {
+            "type" : "number"
+          }
+        },
+        "required" : [ "availableBalance", "currency", "reservedBalance" ],
+        "type" : "object"
+      },
+      "WalletLimitsResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "dailyDeposit" : {
+            "type" : "number"
+          },
+          "dailyTransfer" : {
+            "type" : "number"
+          },
+          "dailyWithdrawal" : {
+            "type" : "number"
+          },
+          "minDeposit" : {
+            "type" : "number"
+          },
+          "minTransfer" : {
+            "type" : "number"
+          },
+          "minWithdrawal" : {
+            "type" : "number"
+          },
+          "singleDeposit" : {
+            "type" : "number"
+          },
+          "singleTransfer" : {
+            "type" : "number"
+          },
+          "singleWithdrawal" : {
+            "type" : "number"
+          }
+        },
+        "required" : [ "currency", "dailyDeposit", "dailyTransfer", "dailyWithdrawal", "minDeposit", "minTransfer", "minWithdrawal", "singleDeposit", "singleTransfer", "singleWithdrawal" ],
+        "type" : "object"
+      },
+      "WalletLookupResponse" : {
+        "properties" : {
+          "maskedName" : {
+            "type" : "string"
+          },
+          "maskedWalletNumber" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "maskedName", "maskedWalletNumber" ],
+        "type" : "object"
+      },
+      "WalletResponse" : {
+        "properties" : {
+          "availableBalance" : {
+            "type" : "number"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "reservedBalance" : {
+            "type" : "number"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tier" : {
+            "type" : "string"
+          },
+          "walletNumber" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "availableBalance", "createdAt", "currency", "reservedBalance", "status", "tier", "walletNumber" ],
+        "type" : "object"
+      },
+      "WalletStatusReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "WalletStatusResponse" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ],
+        "type" : "object"
+      },
+      "WithdrawalRequest" : {
+        "properties" : {
+          "amount" : {
+            "type" : "number"
+          },
+          "currency" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "currency" ],
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "description" : "The access token from login or refresh",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Portfolio MVP of a digital wallet. No real money is processed: deposits and withdrawals are simulated. Every error answers with the error body ApiErrorResponse; errorCode names the condition.",
+    "title" : "Digital Wallet Platform API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/admin/customers/{customerId}/freeze" : {
+      "post" : {
+        "description" : "An unknown customer and one without a wallet are the same 404.",
+        "operationId" : "freezeCustomerWallet",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "customerId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/WalletStatusReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerWalletStatusResponse"
+                }
+              }
+            },
+            "description" : "The wallet's status; repeating it changes nothing"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404); a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Freeze a customer's wallet",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/customers/{customerId}/unfreeze" : {
+      "post" : {
+        "description" : "An unknown customer and one without a wallet are the same 404.",
+        "operationId" : "unfreezeCustomerWallet",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "customerId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/WalletStatusReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerWalletStatusResponse"
+                }
+              }
+            },
+            "description" : "The wallet's status; repeating it changes nothing"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404); a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Unfreeze a customer's wallet",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/kyc/applications" : {
+      "get" : {
+        "description" : "Oldest submission first; drafts are never listed.",
+        "operationId" : "listKycApplicationsForReview",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "default" : "PENDING_REVIEW",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseKycReviewSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing or invalid query parameter. The message names the field, never its value.\n\n`VALIDATION_ERROR`: status other than PENDING_REVIEW, APPROVED or REJECTED"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "List submitted KYC applications",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/kyc/applications/{id}" : {
+      "get" : {
+        "description" : "A DRAFT is the same 404 as a missing id.",
+        "operationId" : "getKycApplicationForReview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycReviewDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get a submitted KYC application",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/kyc/applications/{id}/approve" : {
+      "post" : {
+        "operationId" : "approveKycApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycReviewDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`FORBIDDEN`: the reviewer's own application"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_KYC_STATE`: no longer PENDING_REVIEW, or the customer already has a legal name or a wallet"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Approve a KYC application; opens the wallet",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/kyc/applications/{id}/reject" : {
+      "post" : {
+        "description" : "The customer sees the reason: never put identity details in it.",
+        "operationId" : "rejectKycApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RejectKycRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycReviewDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404); a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`VALIDATION_ERROR`: a reason that contains the application's document reference"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`FORBIDDEN`: the reviewer's own application"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_KYC_STATE`: no longer PENDING_REVIEW"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Reject a KYC application",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/transfer-reviews" : {
+      "get" : {
+        "description" : "PENDING_REVIEW only, soonest deadline first, then by id.",
+        "operationId" : "listTransferReviews",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseTransferReviewSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing or invalid query parameter. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "List the transfers held for review",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/transfer-reviews/{transferId}" : {
+      "get" : {
+        "description" : "A transfer that was never held is the same 404 as a missing id.",
+        "operationId" : "getTransferReview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "transferId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferReviewDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get a transfer that was held for review",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/transfer-reviews/{transferId}/approve" : {
+      "post" : {
+        "operationId" : "approveTransferReview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "transferId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferReviewDetailResponse"
+                }
+              }
+            },
+            "description" : "The detail as committed. An approval that finds a frozen or closed wallet rejects the transfer (status REJECTED, rejectionReasonCategory WALLET_UNAVAILABLE)."
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`FORBIDDEN`: the reviewer is the sender or the recipient"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_TRANSFER_STATE`: no longer PENDING_REVIEW, or at or after the deadline: the transfer then expires and the hold is released"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Approve a held transfer",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/admin/transfer-reviews/{transferId}/reject" : {
+      "post" : {
+        "operationId" : "rejectTransferReview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "transferId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RejectTransferRequest"
+              }
+            }
+          },
+          "description" : "Required with a reason before the deadline. The server reads the body as optional only so that a late rejection expires the transfer whatever it holds.",
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferReviewDetailResponse"
+                }
+              }
+            },
+            "description" : "The detail as committed. An approval that finds a frozen or closed wallet rejects the transfer (status REJECTED, rejectionReasonCategory WALLET_UNAVAILABLE)."
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404); a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`VALIDATION_ERROR`: before the deadline only: a missing, blank or invalid reason, or no body (after it, any reject is the 409)"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`FORBIDDEN`: the reviewer is the sender or the recipient"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_TRANSFER_STATE`: no longer PENDING_REVIEW, or at or after the deadline: the transfer then expires and the hold is released, whatever the body"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Reject a held transfer",
+        "tags" : [ "Admin" ]
+      }
+    },
+    "/api/v1/auth/change-password" : {
+      "post" : {
+        "operationId" : "changePassword",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Changed; every session ends, this one too, and the refresh cookie is cleared"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`VALIDATION_ERROR`: newPassword outside the length policy, or a recent password repeated"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path\n\n`UNAUTHORIZED`: also a wrong current password"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Change the caller's password",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/forgot-password" : {
+      "post" : {
+        "operationId" : "requestPasswordReset",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "description" : "Always; a code is emailed only to an account that can reset its password"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Email a password-reset code",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/login" : {
+      "post" : {
+        "operationId" : "loginUser",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "The access token; the refresh token is set in an HttpOnly cookie"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: a wrong password, an unknown account or a locked account; identical for all three"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Log in with email and password",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/logout" : {
+      "post" : {
+        "description" : "Requires the X-Requested-With header and an Origin on the allow-list.",
+        "operationId" : "logoutUser",
+        "responses" : {
+          "204" : {
+            "description" : "Signed out; the refresh cookie is cleared"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: no X-Requested-With header, or an Origin that is missing or not allowed"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "End the caller's session",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/refresh" : {
+      "post" : {
+        "description" : "Requires the X-Requested-With header and an Origin on the allow-list.",
+        "operationId" : "refreshAccessToken",
+        "parameters" : [ {
+          "in" : "cookie",
+          "name" : "refresh_token",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "A new access token; the refresh cookie is rotated"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: a missing, invalid, expired, revoked or reused refresh token, or an ended session"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: no X-Requested-With header, or an Origin that is missing or not allowed"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Get a new access token with the refresh cookie",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/register" : {
+      "post" : {
+        "operationId" : "registerAccount",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RegisterResponse"
+                }
+              }
+            },
+            "description" : "Identical for a new and an existing account; a verification code is emailed to a new or still unverified one"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Register a customer account",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/resend-otp" : {
+      "post" : {
+        "operationId" : "resendOtp",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResendOtpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "description" : "Always, also for an unknown identifier or when a limit sends nothing; PASSWORD_RESET behaves like forgot-password"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Send a new code",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/reset-password" : {
+      "post" : {
+        "operationId" : "resetPassword",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "The password is reset; every session ends"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`INVALID_RESET_TOKEN`: an unknown, expired or already used reset token, or one whose account can no longer reset; the message is \"Invalid or expired reset token\"\n\n`VALIDATION_ERROR`: newPassword outside the length policy, or a recent password repeated"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Set a new password with a reset token",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/verify-otp" : {
+      "post" : {
+        "operationId" : "verifyOtp",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VerifyOtpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResetTokenResponse"
+                }
+              }
+            },
+            "description" : "PASSWORD_RESET: the body holds the reset token. REGISTRATION: an empty body; the account is active."
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`INVALID_OTP`: a wrong, expired, used-up or cancelled code, an unknown identifier, the purpose LOGIN, or a missing or wrong password for REGISTRATION; identical for every failure"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "summary" : "Verify an emailed code",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/customers/me" : {
+      "get" : {
+        "operationId" : "getCustomerProfile",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get the caller's profile",
+        "tags" : [ "Customer" ]
+      },
+      "put" : {
+        "operationId" : "updateCustomerProfile",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerProfileResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`VALIDATION_ERROR`: a date of birth in the future, or a country code that is not ISO 3166-1 alpha-2"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_KYC_STATE`: locked from KYC submit onward (pending or approved application, or a legal name set)"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Set the date of birth and the country",
+        "tags" : [ "Customer" ]
+      }
+    },
+    "/api/v1/kyc/applications" : {
+      "post" : {
+        "operationId" : "createKycApplication",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/KycApplicationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycApplicationResponse"
+                }
+              }
+            },
+            "description" : "The new DRAFT application",
+            "headers" : {
+              "Location" : {
+                "description" : "The path of the new application",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`KYC_ALREADY_ACTIVE`: the caller already has a draft, pending or approved application"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Start a KYC application (DRAFT)",
+        "tags" : [ "KYC" ]
+      }
+    },
+    "/api/v1/kyc/applications/{id}" : {
+      "get" : {
+        "operationId" : "getKycApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycApplicationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get one of the caller's applications",
+        "tags" : [ "KYC" ]
+      },
+      "put" : {
+        "operationId" : "updateKycApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/KycApplicationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycApplicationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404); a malformed body or a body field that fails validation. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_KYC_STATE`: the application is no longer a DRAFT"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Edit a DRAFT application",
+        "tags" : [ "KYC" ]
+      }
+    },
+    "/api/v1/kyc/applications/{id}/submit" : {
+      "post" : {
+        "operationId" : "submitKycApplication",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycApplicationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value.\n\n`VALIDATION_ERROR`: the profile has no date of birth or no country code yet"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_KYC_STATE`: the application is not a DRAFT"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Submit a DRAFT application for review",
+        "tags" : [ "KYC" ]
+      }
+    },
+    "/api/v1/kyc/status" : {
+      "get" : {
+        "operationId" : "getKycStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/KycStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get the caller's KYC status",
+        "tags" : [ "KYC" ]
+      }
+    },
+    "/api/v1/transactions" : {
+      "get" : {
+        "description" : "Newest first; an empty page before KYC approval.",
+        "operationId" : "listTransactions",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseTransactionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing or invalid query parameter. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "List the caller's completed movements",
+        "tags" : [ "Transaction" ]
+      }
+    },
+    "/api/v1/transfers" : {
+      "get" : {
+        "description" : "The sender sees every status, the receiver only COMPLETED.",
+        "operationId" : "listTransfers",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "size",
+          "required" : false,
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseTransferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing or invalid query parameter. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "List the caller's transfers",
+        "tags" : [ "Transfer" ]
+      },
+      "post" : {
+        "operationId" : "createTransfer",
+        "parameters" : [ {
+          "description" : "Required. A client-generated UUID v4 (version and RFC variant are checked). The same key with the same body replays the original status and body; the same key with a different body is 409 IDEMPOTENCY_KEY_REUSED (documentations/02 §1.3, §1.4).",
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateTransferRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferResponse"
+                }
+              }
+            },
+            "description" : "COMPLETED (posted, ledgerStatus POSTED) or PENDING_REVIEW (the amount is held until reviewExpiresAt). A replay with the same Idempotency-Key and request returns the creation-time answer."
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing Idempotency-Key, or one that is not a UUID v4; a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`INVALID_AMOUNT`: zero or negative, more than 2 decimals, too many digits, or below the minimum\n\n`CURRENCY_MISMATCH`: a currency other than THB"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`KYC_REQUIRED`: no wallet yet: KYC is not approved\n\n`RISK_BLOCKED`: the risk assessment blocked the transfer; it is recorded as BLOCKED"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: a missing, frozen or closed recipient wallet, a wrong check digit, or the caller's own wallet when it is not ACTIVE; identical in every case"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SELF_TRANSFER`: the recipient is the caller's own ACTIVE wallet\n\n`IDEMPOTENCY_KEY_REUSED`: the Idempotency-Key was used with a different request; a stored refusal is replayed with its own code\n\n`WALLET_FROZEN`: the sender's wallet is frozen\n\n`SINGLE_LIMIT_EXCEEDED`: above the per-transaction maximum\n\n`DAILY_LIMIT_EXCEEDED`: used plus reserved amounts over the tier's daily limit (Asia/Bangkok day)\n\n`INSUFFICIENT_BALANCE`: the available balance is lower than the amount"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: the caller is over a wallet-lookup window, whatever the recipient\n\n`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: the risk evaluation failed; nothing moved\n\n`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Transfer to another customer's wallet",
+        "tags" : [ "Transfer" ]
+      }
+    },
+    "/api/v1/transfers/{id}" : {
+      "get" : {
+        "description" : "A receiver sees only a COMPLETED transfer; anything else is the 404.",
+        "operationId" : "getTransfer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get one of the caller's transfers",
+        "tags" : [ "Transfer" ]
+      }
+    },
+    "/api/v1/transfers/{id}/cancel" : {
+      "post" : {
+        "description" : "Only the sender; anyone else gets the 404. No Idempotency-Key.",
+        "operationId" : "cancelTransfer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferResponse"
+                }
+              }
+            },
+            "description" : "The cancelled transfer; the hold is released"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`INVALID_TRANSFER_STATE`: not PENDING_REVIEW, or at or after reviewExpiresAt: the transfer then expires, the hold is released and nothing else changes"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Cancel a transfer held for review",
+        "tags" : [ "Transfer" ]
+      }
+    },
+    "/api/v1/transfers/{id}/status" : {
+      "get" : {
+        "description" : "The same visibility as getTransfer.",
+        "operationId" : "getTransferStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a path id that is not a UUID (a well-formed unknown id is the 404). The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no such resource, or it belongs to someone else: the response is identical"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get a transfer's status",
+        "tags" : [ "Transfer" ]
+      }
+    },
+    "/api/v1/wallet" : {
+      "get" : {
+        "operationId" : "getWallet",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`WALLET_NOT_FOUND`: no wallet yet: KYC is not approved"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get the caller's wallet",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallet/balance" : {
+      "get" : {
+        "operationId" : "getWalletBalance",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletBalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`WALLET_NOT_FOUND`: no wallet yet: KYC is not approved"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get the caller's balance",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallet/deposits" : {
+      "post" : {
+        "operationId" : "createDeposit",
+        "parameters" : [ {
+          "description" : "Required. A client-generated UUID v4 (version and RFC variant are checked). The same key with the same body replays the original status and body; the same key with a different body is 409 IDEMPOTENCY_KEY_REUSED (documentations/02 §1.3, §1.4).",
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DepositRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MoneyMovementResponse"
+                }
+              }
+            },
+            "description" : "COMPLETED and posted (ledgerStatus POSTED), returned after the commit; a replay with the same Idempotency-Key and body returns the original status and body"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing Idempotency-Key, or one that is not a UUID v4; a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`INVALID_AMOUNT`: zero or negative, more than 2 decimals, too many digits, or below the minimum\n\n`CURRENCY_MISMATCH`: a currency other than THB"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`KYC_REQUIRED`: no wallet yet: KYC is not approved"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`IDEMPOTENCY_KEY_REUSED`: the Idempotency-Key was used with a different request; a stored refusal is replayed with its own code\n\n`WALLET_FROZEN`: the wallet is frozen\n\n`SINGLE_LIMIT_EXCEEDED`: above the per-transaction maximum\n\n`DAILY_LIMIT_EXCEEDED`: over the daily limit of the Asia/Bangkok day"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Deposit simulated money",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallet/freeze" : {
+      "post" : {
+        "description" : "Freezing a frozen wallet changes nothing. Only staff unfreeze.",
+        "operationId" : "freezeWallet",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`WALLET_NOT_FOUND`: no wallet yet: KYC is not approved"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Freeze the caller's wallet",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallet/limits" : {
+      "get" : {
+        "operationId" : "getWalletLimits",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletLimitsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`WALLET_NOT_FOUND`: no wallet yet: KYC is not approved"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get the limits of the caller's tier",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallet/status" : {
+      "get" : {
+        "operationId" : "getWalletStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`WALLET_NOT_FOUND`: no wallet yet: KYC is not approved"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Get the caller's wallet status",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallet/withdrawals" : {
+      "post" : {
+        "operationId" : "createWithdrawal",
+        "parameters" : [ {
+          "description" : "Required. A client-generated UUID v4 (version and RFC variant are checked). The same key with the same body replays the original status and body; the same key with a different body is 409 IDEMPOTENCY_KEY_REUSED (documentations/02 §1.3, §1.4).",
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/WithdrawalRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MoneyMovementResponse"
+                }
+              }
+            },
+            "description" : "COMPLETED and posted (ledgerStatus POSTED), returned after the commit; a replay with the same Idempotency-Key and body returns the original status and body"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing Idempotency-Key, or one that is not a UUID v4; a malformed body or a body field that fails validation. The message names the field, never its value.\n\n`INVALID_AMOUNT`: zero or negative, more than 2 decimals, too many digits, or below the minimum\n\n`CURRENCY_MISMATCH`: a currency other than THB"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`KYC_REQUIRED`: no wallet yet: KYC is not approved"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`IDEMPOTENCY_KEY_REUSED`: the Idempotency-Key was used with a different request; a stored refusal is replayed with its own code\n\n`WALLET_FROZEN`: the wallet is frozen\n\n`SINGLE_LIMIT_EXCEEDED`: above the per-transaction maximum\n\n`DAILY_LIMIT_EXCEEDED`: over the daily limit of the Asia/Bangkok day\n\n`INSUFFICIENT_BALANCE`: the available balance is lower than the amount"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNSUPPORTED_MEDIA_TYPE`: the body is not application/json"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Withdraw simulated money",
+        "tags" : [ "Wallet" ]
+      }
+    },
+    "/api/v1/wallets/lookup" : {
+      "get" : {
+        "description" : "Counted and audited; refusals for format, caller status or the limit are not.",
+        "operationId" : "lookupWallet",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "walletNumber",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WalletLookupResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`VALIDATION_ERROR`: a missing or invalid query parameter. The message names the field, never its value."
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`UNAUTHORIZED`: missing, invalid or expired access token, or an ended session; identical on every path"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`FORBIDDEN`: the caller's role may not use this endpoint\n\n`KYC_REQUIRED`: the caller has no wallet yet"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`NOT_FOUND`: no ACTIVE wallet with this number, a wrong check digit, or the caller's own wallet; identical in every case"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`WALLET_FROZEN`: the caller's wallet is frozen"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`RATE_LIMITED`: over the per-user or per-IP lookup window\n\n`RATE_LIMITED`: too many requests; retry after Retry-After seconds",
+            "headers" : {
+              "Retry-After" : {
+                "description" : "Whole seconds to wait before retrying",
+                "schema" : {
+                  "type" : "integer"
+                }
+              }
+            }
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description" : "`SYSTEM_ERROR`: an unexpected error; no internal detail is returned"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Find a recipient by exact wallet number",
+        "tags" : [ "Wallet" ]
+      }
+    }
+  },
+  "tags" : [ {
+    "description" : "Staff: KYC decisions, transfer reviews, wallet freeze",
+    "name" : "Admin"
+  }, {
+    "description" : "Registration, login, sessions and passwords",
+    "name" : "Auth"
+  }, {
+    "description" : "The caller's own profile",
+    "name" : "Customer"
+  }, {
+    "description" : "The caller's KYC applications",
+    "name" : "KYC"
+  }, {
+    "description" : "The caller's history, read from the ledger",
+    "name" : "Transaction"
+  }, {
+    "description" : "Transfers between customers' wallets",
+    "name" : "Transfer"
+  }, {
+    "description" : "The caller's own wallet, deposits and withdrawals",
+    "name" : "Wallet"
+  } ]
+}
