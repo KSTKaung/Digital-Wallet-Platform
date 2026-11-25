@@ -8,6 +8,7 @@ on:
       - "backend/**"
       - "frontend/**"
       - "scripts/**"
+      - "infra/**"
       - ".github/workflows/compose.yml"
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "backend/**"
       - "frontend/**"
       - "scripts/**"
+      - "infra/**"
       - ".github/workflows/compose.yml"
 
 permissions:

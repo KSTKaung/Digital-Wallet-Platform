@@ -41,10 +41,17 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && detail ? `  (${detail})` : ''}`);
   return ok;
 }
+/** A failed check that later steps depend on; it is already counted, so main() does not count it again. */
+class StopError extends Error {}
 function must(name, ok, detail) {
   if (!check(name, ok, detail)) {
-    throw new Error(`stopping: "${name}" failed and later steps depend on it`);
+    throw new StopError(`stopping: "${name}" failed and later steps depend on it`);
   }
+}
+
+/** Every request gets a timeout, so a server that accepts but never answers cannot stall a step. */
+function get(url) {
+  return fetch(url, { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -118,10 +125,10 @@ class Session {
 async function latestOtp(email) {
   return waitFor(`the code email to ${email.replace(/@.*/, '@…')}`, async () => {
     const query = encodeURIComponent(`to:${email}`);
-    const list = await (await fetch(`${MAIL}/api/v1/search?query=${query}`)).json();
+    const list = await (await get(`${MAIL}/api/v1/search?query=${query}`)).json();
     const message = list.messages?.[0];
     if (!message) return null;
-    const full = await (await fetch(`${MAIL}/api/v1/message/${message.ID}`)).json();
+    const full = await (await get(`${MAIL}/api/v1/message/${message.ID}`)).json();
     return /\b(\d{6})\b/.exec(full.Text ?? '')?.[1] ?? null;
   });
 }
@@ -199,19 +206,19 @@ async function approvedWallet(customer, compliance) {
 async function main() {
   // The stack is up and the SPA is served with its security headers.
   const health = await waitFor('the backend health through nginx', async () => {
-    const response = await fetch(`${BASE}/actuator/health`);
+    const response = await get(`${BASE}/actuator/health`);
     return response.ok ? response.json() : null;
   });
   check('backend health UP through nginx', health?.status === 'UP', health?.status);
   for (const path of ['/', '/transfers', '/admin/kyc']) {
-    const response = await fetch(BASE + path);
+    const response = await get(BASE + path);
     const csp = response.headers.get('content-security-policy') ?? '';
     check(`SPA ${path} served with the CSP`, response.status === 200 && csp.includes("script-src 'self'"), String(response.status));
   }
 
   // The OpenAPI document is served only by the backend in the local profile, never through nginx
   // (documentations/06 §4, MVP-ADR-15): nginx answers this path with the SPA shell.
-  const docs = await fetch(`${BASE}/v3/api-docs`);
+  const docs = await get(`${BASE}/v3/api-docs`);
   const docsBody = await docs.text();
   check(
     'API document not reachable through nginx',
@@ -279,7 +286,7 @@ const started = Date.now();
 try {
   await main();
 } catch (error) {
-  failures++;
+  if (!(error instanceof StopError)) failures++;
   console.log(`FAIL  ${error instanceof Error ? error.message : 'unexpected error'}`);
 }
 const seconds = Math.round((Date.now() - started) / 1000);
