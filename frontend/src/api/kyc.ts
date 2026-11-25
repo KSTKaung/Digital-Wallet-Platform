@@ -8,22 +8,18 @@ import { apiRequest } from './client';
 import type { RequestBodyOf, ResponseBodyOf } from './types';
 
 export type KycApplication = ResponseBodyOf<'/api/v1/kyc/applications/{id}', 'get'>;
-type GeneratedKycStatus = ResponseBodyOf<'/api/v1/kyc/status', 'get'>;
-
-/**
- * The generated type cannot say that `applicationId` is `null` with status NONE (doc 02 §2.2), so
- * it is widened here; every other field is as generated.
- */
-export type KycStatusResponse = Omit<GeneratedKycStatus, 'applicationId'> & {
-  applicationId?: string | null;
-};
+/** `applicationId` and `verificationLevel` are `null` with status NONE (doc 02 §2.2). */
+export type KycStatusResponse = ResponseBodyOf<'/api/v1/kyc/status', 'get'>;
 
 type ApplicationBody = RequestBodyOf<'/api/v1/kyc/applications', 'post'>;
 
 export type VerificationLevel = 'BASIC' | 'FULL';
 export type DocumentType = 'ID_CARD' | 'PASSPORT';
 
-/** POST and PUT body, with the enums narrowed to the documented values. */
+/**
+ * POST and PUT body, with the enums narrowed to the documented values. Kept local: the OpenAPI
+ * document types both as plain `string` (the server validates them).
+ */
 export type KycApplicationRequest = Omit<ApplicationBody, 'verificationLevel' | 'documentType'> & {
   verificationLevel: VerificationLevel;
   documentType: DocumentType;

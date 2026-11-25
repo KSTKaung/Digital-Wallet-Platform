@@ -2,10 +2,10 @@ name: Frontend
 
 on:
   pull_request:
-    paths: ["frontend/**", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "openapi/**", ".github/workflows/frontend.yml"]
   push:
     branches: [main]
-    paths: ["frontend/**", ".github/workflows/frontend.yml"]
+    paths: ["frontend/**", "openapi/**", ".github/workflows/frontend.yml"]
 
 permissions:
   contents: read
@@ -32,6 +32,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-fund
+      # documentations/08 §4E E2: the committed types must equal those generated from the
+      # committed document (../openapi/openapi.json, the script's default source).
+      - name: Check API types against openapi/openapi.json
+        run: |
+          npm run api:types
+          if ! git diff --exit-code -- src/api/schema.d.ts; then
+            echo "::error file=frontend/src/api/schema.d.ts::schema.d.ts is out of date with openapi/openapi.json: run npm run api:types"
+            exit 1
+          fi
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check

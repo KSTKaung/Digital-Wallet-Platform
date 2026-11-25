@@ -9,6 +9,7 @@
 //   single-flight applies.
 
 import { apiBaseUrl, CORRELATION_ID_HEADER, newUuid, readBody, toApiError } from '../api/http';
+import type { ResponseBodyOf } from '../api/types';
 import { clearSession, getAccessToken, getSessionGeneration, setSession } from './tokenStore';
 
 export const REFRESH_LOCK_NAME = 'wallet-refresh';
@@ -17,10 +18,8 @@ export const REFRESH_PATH = '/api/v1/auth/refresh';
 /** `refreshed`: a new token is stored. `signedOut`: the server refused; local state is cleared. */
 export type RefreshOutcome = 'refreshed' | 'signedOut';
 
-interface TokenResponse {
-  accessToken?: string;
-  expiresIn?: number;
-}
+/** Partial: the body is checked field by field below before anything is stored. */
+type TokenResponse = Partial<ResponseBodyOf<typeof REFRESH_PATH, 'post'>>;
 
 let inFlight: Promise<RefreshOutcome> | null = null;
 

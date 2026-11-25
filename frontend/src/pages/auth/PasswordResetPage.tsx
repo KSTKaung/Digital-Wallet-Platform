@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { forgotPassword, resetPassword, verifyOtp } from '../../api/auth';
 import { ApiError } from '../../api/client';
-import { describeError, type DescribedError } from '../../api/errorMessages';
+import { describeError, RESET_EXPIRED_MESSAGE, type DescribedError } from '../../api/errorMessages';
 import type { LoginLocationState } from '../../auth/authContext';
 import { ErrorNotice, InfoNotice } from '../../components/ErrorNotice';
 import { useFocusFirstInvalid, useFocusOn, useSubmitGuard } from '../../components/formHooks';
@@ -40,8 +40,6 @@ const TITLES: Record<ResetStep, string> = {
 
 export const CODE_SENT_MESSAGE =
   'If an account exists for this email, we have sent it a 6-digit code. The code expires after 5 minutes.';
-export const RESET_EXPIRED_MESSAGE =
-  'This password reset has expired or was already used. Start again to get a new code.';
 
 /**
  * Forgot and reset password as one flow on two routes (doc 05 §5.2, MVP-ADR-23):
@@ -271,16 +269,14 @@ export function PasswordResetPage({ start }: { start: 'request' | 'code' }) {
 }
 
 /**
- * reset-password refuses an unknown, used or expired token with 400 VALIDATION_ERROR ("Invalid or
- * expired reset token"); a password-policy refusal is also VALIDATION_ERROR but names
- * `newPassword`. The two are told apart by that field prefix; a 401 is treated as expired too.
+ * reset-password refuses an unknown, expired, used or superseded token with
+ * `400 INVALID_RESET_TOKEN` (doc 06 MVP-ADR-19 amendment), matched by code, never by message. A
+ * password refusal (policy or reuse) is `400 VALIDATION_ERROR` naming `newPassword` and keeps the
+ * reset going, as does any other VALIDATION_ERROR. A 401 is treated as expired too.
  */
 function isExpiredReset(error: unknown): boolean {
   if (!(error instanceof ApiError)) {
     return false;
   }
-  if (error.status === 401) {
-    return true;
-  }
-  return error.errorCode === 'VALIDATION_ERROR' && !/^newPassword\b/.test(error.message.trim());
+  return error.status === 401 || error.errorCode === 'INVALID_RESET_TOKEN';
 }

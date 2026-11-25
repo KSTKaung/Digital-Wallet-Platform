@@ -1,6 +1,7 @@
 package com.portfolio.wallet.admin.web;
 
 import com.portfolio.wallet.user.application.KycReviewSummary;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -17,7 +18,7 @@ record KycReviewSummaryResponse(
     String documentReference,
     String maskedName,
     Instant submittedAt,
-    Instant decidedAt,
+    @Schema(nullable = true, description = "Null until decided") Instant decidedAt,
     Instant createdAt) {
 
   static KycReviewSummaryResponse from(KycReviewSummary summary) {

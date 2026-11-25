@@ -18,6 +18,7 @@ const err = (status: number, code: string, message = 'server text', retry?: numb
 describe('describeError', () => {
   it.each([
     ['INVALID_OTP', /code is wrong or has expired/],
+    ['INVALID_RESET_TOKEN', /^This password reset has expired or was already used\./],
     ['OTP_EXPIRED', /code has expired/],
     ['OTP_ATTEMPTS_EXCEEDED', /Too many wrong codes/],
     ['KYC_REQUIRED', /^Complete KYC to continue\.$/],

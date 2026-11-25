@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
+import tools.jackson.databind.JsonNode;
 
 /** Forgot, verify, reset and change password (documentations/08 §4A.5; AC 3, 4, 5, 8). */
 class PasswordFlowIT extends AuthFlowSupport {
@@ -80,11 +81,16 @@ class PasswordFlowIT extends AuthFlowSupport {
         "PASSWORD_RESET");
   }
 
-  private static void assertInvalidToken(MockHttpServletResponse response) throws Exception {
+  /**
+   * An unusable reset token (unknown, expired, used, superseded, or of an account that can no
+   * longer reset) has its own code, with the status and message it had as {@code VALIDATION_ERROR}
+   * (documentations/08 §4E.2 E3).
+   */
+  private void assertInvalidToken(MockHttpServletResponse response) throws Exception {
     assertThat(response.getStatus()).isEqualTo(400);
-    assertThat(response.getContentAsString())
-        .contains("\"errorCode\":\"VALIDATION_ERROR\"")
-        .contains("Invalid or expired reset token");
+    JsonNode body = jsonMapper.readTree(response.getContentAsString());
+    assertThat(body.get("errorCode").asString()).isEqualTo("INVALID_RESET_TOKEN");
+    assertThat(body.get("message").asString()).isEqualTo("Invalid or expired reset token");
   }
 
   private static void assertPolicyRefusal(MockHttpServletResponse response) throws Exception {
@@ -264,20 +270,26 @@ class PasswordFlowIT extends AuthFlowSupport {
     String email = activeUser();
     String token = resetTokenFor(email, 2);
 
-    List<Integer> statuses = new ArrayList<>();
+    List<MockHttpServletResponse> responses = new ArrayList<>();
     try (ExecutorService pool = Executors.newFixedThreadPool(6)) {
-      List<Future<Integer>> futures = new ArrayList<>();
+      List<Future<MockHttpServletResponse>> futures = new ArrayList<>();
       for (int i = 0; i < 6; i++) {
         String password = NEW_PASSWORD + "-" + i;
-        futures.add(pool.submit(() -> reset(token, password).getStatus()));
+        futures.add(pool.submit(() -> reset(token, password)));
       }
-      for (Future<Integer> future : futures) {
-        statuses.add(future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+      for (Future<MockHttpServletResponse> future : futures) {
+        responses.add(future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
       }
     }
 
+    List<Integer> statuses = responses.stream().map(MockHttpServletResponse::getStatus).toList();
     assertThat(statuses).containsOnly(200, 400);
     assertThat(statuses.stream().filter(status -> status == 200)).hasSize(1);
+    for (MockHttpServletResponse response : responses) {
+      if (response.getStatus() == 400) {
+        assertInvalidToken(response);
+      }
+    }
   }
 
   @Test

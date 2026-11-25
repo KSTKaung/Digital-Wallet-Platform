@@ -8,29 +8,19 @@ import { pageQueryString, type PageQuery } from './paging';
 import type { RequestBodyOf, ResponseBodyOf } from './types';
 import { moneyJson } from './wallet';
 
-type GeneratedTransfer = ResponseBodyOf<'/api/v1/transfers/{id}', 'get'>;
-type GeneratedTransferPage = ResponseBodyOf<'/api/v1/transfers', 'get'>;
 type CreateTransferBody = RequestBodyOf<'/api/v1/transfers', 'post'>;
 
 /**
- * The `Transfer` object (create, list items, detail, cancel). The generated type cannot say that
- * `rejectionReason`, `reviewExpiresAt` and `ledgerStatus` are `null` when they do not apply
- * (doc 02 §2.4), so those three are widened; every other field is as generated.
+ * The `Transfer` object (create, list items, detail, cancel). `rejectionReason`,
+ * `reviewExpiresAt` and `ledgerStatus` are `null` when they do not apply (doc 02 §2.4).
  */
-export type Transfer = Omit<
-  GeneratedTransfer,
-  'rejectionReason' | 'reviewExpiresAt' | 'ledgerStatus'
-> & {
-  rejectionReason?: string | null;
-  reviewExpiresAt?: string | null;
-  ledgerStatus?: string | null;
-};
+export type Transfer = ResponseBodyOf<'/api/v1/transfers/{id}', 'get'>;
 
-export type TransferPage = Omit<GeneratedTransferPage, 'items'> & { items?: Transfer[] };
+export type TransferPage = ResponseBodyOf<'/api/v1/transfers', 'get'>;
 
 /**
  * `amount` is canonical decimal text (from checkAmount), written into the JSON as a number literal
- * (see moneyJson). `description` is sent exactly as typed, never trimmed; an empty description is
+ * (see moneyJson); kept local because the schema's `number` would mean a float conversion. `description` is sent exactly as typed, never trimmed; an empty description is
  * left out rather than sent as `""` (doc 02 §2.4: `""` is a different request from no
  * description).
  */

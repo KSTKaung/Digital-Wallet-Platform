@@ -1,6 +1,11 @@
 package com.portfolio.wallet.admin.web;
 
+import com.portfolio.wallet.common.web.OpenApiDocumentation;
 import com.portfolio.wallet.wallet.application.WalletStatusService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -20,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
  * member is the JWT subject. An unknown customer and one without a wallet give the identical {@code
  * 404}.
  */
+@Tag(name = "Admin", description = "Staff: KYC decisions, transfer reviews, wallet freeze")
+@SecurityRequirement(name = OpenApiDocumentation.BEARER)
 @RestController
 @RequestMapping("/api/v1/admin/customers/{customerId}")
 @PreAuthorize("hasRole('ADMIN')")
@@ -31,6 +38,13 @@ public class CustomerWalletController {
     this.statuses = statuses;
   }
 
+  @Operation(
+      operationId = "freezeCustomerWallet",
+      summary = "Freeze a customer's wallet",
+      description = "An unknown customer and one without a wallet are the same 404.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "The wallet's status; repeating it changes nothing")
   @PostMapping("/freeze")
   CustomerWalletStatusResponse freeze(
       @AuthenticationPrincipal Jwt jwt,
@@ -42,6 +56,13 @@ public class CustomerWalletController {
             staff(jwt), customerId, body.reason(), RequestText.clientIp(request)));
   }
 
+  @Operation(
+      operationId = "unfreezeCustomerWallet",
+      summary = "Unfreeze a customer's wallet",
+      description = "An unknown customer and one without a wallet are the same 404.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "The wallet's status; repeating it changes nothing")
   @PostMapping("/unfreeze")
   CustomerWalletStatusResponse unfreeze(
       @AuthenticationPrincipal Jwt jwt,

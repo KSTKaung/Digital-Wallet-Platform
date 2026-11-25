@@ -53,7 +53,10 @@ export function register(request: RegisterRequest): Promise<RegisterResponse> {
   return post<RegisterResponse>('/register', request);
 }
 
-/** REGISTRATION: empty 200. PASSWORD_RESET: `{resetToken}`. Every failure is `400 INVALID_OTP`. */
+/**
+ * REGISTRATION: empty 200. PASSWORD_RESET: `{resetToken}`. Every failure is `400 INVALID_OTP`.
+ * The document has one 200 body for both purposes, so the overloads stay local.
+ */
 export function verifyOtp(request: RegistrationOtpRequest): Promise<void>;
 export function verifyOtp(request: PasswordResetOtpRequest): Promise<ResetTokenResponse>;
 export function verifyOtp(

@@ -1,6 +1,7 @@
 package com.portfolio.wallet.transfer.web;
 
 import com.portfolio.wallet.transfer.application.TransferView;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -26,10 +27,15 @@ record TransferResponse(
     BigDecimal amount,
     String currency,
     Counterparty counterparty,
-    String rejectionReason,
-    Instant reviewExpiresAt,
+    @Schema(
+            nullable = true,
+            description = "REVIEW_DECLINED or WALLET_UNAVAILABLE for REJECTED, otherwise null")
+        String rejectionReason,
+    @Schema(nullable = true, description = "The review deadline while PENDING_REVIEW, else null")
+        Instant reviewExpiresAt,
     Instant createdAt,
-    String ledgerStatus) {
+    @Schema(nullable = true, description = "POSTED for COMPLETED, otherwise null")
+        String ledgerStatus) {
 
   /** The other party, masked (MVP-ADR-20; Q8). */
   record Counterparty(String maskedName, String maskedWalletNumber) {

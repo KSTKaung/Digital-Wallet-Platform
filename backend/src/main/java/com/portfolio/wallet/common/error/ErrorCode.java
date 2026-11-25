@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
  * {@link #METHOD_NOT_ALLOWED} are MVP additions for generic framework errors that doc 02 maps to a
  * status but does not name (documentations/06 MVP-ADR-19, which also adds {@link #RATE_LIMITED},
  * {@link #UNSUPPORTED_MEDIA_TYPE}, {@link #INVALID_TRANSFER_STATE} and {@link #INVALID_KYC_STATE}).
+ * {@link #INVALID_RESET_TOKEN} is the PR 7 addition (documentations/08 §4E.2 E3).
  */
 public enum ErrorCode {
   // Generic (MVP additions)
@@ -42,6 +43,10 @@ public enum ErrorCode {
 
   // Authentication
   INVALID_OTP(HttpStatus.BAD_REQUEST),
+  // An unknown, expired or used password-reset token, or one whose account can no longer reset
+  // (owner, 2026-11-22, documentations/08 §4E.2 E3): same status and message as the former
+  // VALIDATION_ERROR, so a client can tell it from a password-policy refusal by the code.
+  INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST),
   // The next three stay in the contract but are unused by decision: every OTP failure is
   // INVALID_OTP and a locked account gets the same 401 as a wrong password (MVP-ADR-23).
   OTP_EXPIRED(HttpStatus.BAD_REQUEST),

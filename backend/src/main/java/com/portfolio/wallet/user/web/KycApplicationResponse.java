@@ -1,6 +1,7 @@
 package com.portfolio.wallet.user.web;
 
 import com.portfolio.wallet.user.application.KycApplicationView;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,9 +17,10 @@ record KycApplicationResponse(
     String documentReference,
     String firstName,
     String lastName,
-    String rejectionReason,
-    Instant submittedAt,
-    Instant decidedAt,
+    @Schema(nullable = true, description = "The reviewer's reason; null unless REJECTED")
+        String rejectionReason,
+    @Schema(nullable = true, description = "Null while DRAFT") Instant submittedAt,
+    @Schema(nullable = true, description = "Null until approved or rejected") Instant decidedAt,
     Instant createdAt,
     Instant updatedAt) {
 

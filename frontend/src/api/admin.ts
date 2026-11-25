@@ -9,32 +9,19 @@ import { apiRequest } from './client';
 import { pageQueryString, type PageQuery } from './paging';
 import type { RequestBodyOf, ResponseBodyOf } from './types';
 
-type GeneratedKycReviewPage = ResponseBodyOf<'/api/v1/admin/kyc/applications', 'get'>;
-type GeneratedKycReviewSummary = NonNullable<GeneratedKycReviewPage['items']>[number];
-type GeneratedKycReviewDetail = ResponseBodyOf<'/api/v1/admin/kyc/applications/{id}', 'get'>;
+export type KycReviewPage = ResponseBodyOf<'/api/v1/admin/kyc/applications', 'get'>;
 
 /**
- * One queue row: legal name and document reference masked by the server. The generated type
- * cannot say that `decidedAt` is `null` while the application is pending, so it is widened.
+ * One queue row: legal name and document reference masked by the server; `decidedAt` is `null`
+ * while the application is pending.
  */
-export type KycReviewSummary = Omit<GeneratedKycReviewSummary, 'decidedAt'> & {
-  decidedAt?: string | null;
-};
-
-export type KycReviewPage = Omit<GeneratedKycReviewPage, 'items'> & { items?: KycReviewSummary[] };
+export type KycReviewSummary = KycReviewPage['items'][number];
 
 /**
  * The reviewer's view: legal name in full, document reference masked, date of birth and country
  * as copied onto the application at submit. The decision fields are `null` until it is decided.
  */
-export type KycReviewDetail = Omit<
-  GeneratedKycReviewDetail,
-  'decidedAt' | 'reviewerId' | 'rejectionReason'
-> & {
-  decidedAt?: string | null;
-  reviewerId?: string | null;
-  rejectionReason?: string | null;
-};
+export type KycReviewDetail = ResponseBodyOf<'/api/v1/admin/kyc/applications/{id}', 'get'>;
 
 /** The statuses the queue can be filtered by (KycReviewService.LISTABLE); drafts are never listed. */
 export const KYC_REVIEW_STATUSES = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'] as const;
@@ -93,56 +80,29 @@ export function rejectKycApplication(id: string, reason: string): Promise<KycRev
   });
 }
 
-type GeneratedTransferReviewPage = ResponseBodyOf<'/api/v1/admin/transfer-reviews', 'get'>;
-type GeneratedTransferReviewSummary = NonNullable<GeneratedTransferReviewPage['items']>[number];
-type GeneratedTransferReviewDetail = ResponseBodyOf<
-  '/api/v1/admin/transfer-reviews/{transferId}',
-  'get'
->;
-type GeneratedTransferReviewHistory = NonNullable<GeneratedTransferReviewDetail['history']>[number];
+export type TransferReviewPage = ResponseBodyOf<'/api/v1/admin/transfer-reviews', 'get'>;
 
 /**
  * One queue row (`PENDING_REVIEW` only, soonest deadline first; overdue ones stay until expired).
- * `score` is a nullable Integer on the server (TransferReviewSummaryResponse), so it is widened.
+ * `score` is a nullable Integer on the server (TransferReviewSummaryResponse).
  */
-export type TransferReviewSummary = Omit<GeneratedTransferReviewSummary, 'score'> & {
-  score?: number | null;
-};
-
-export type TransferReviewPage = Omit<GeneratedTransferReviewPage, 'items'> & {
-  items?: TransferReviewSummary[];
-};
+export type TransferReviewSummary = TransferReviewPage['items'][number];
 
 /**
- * The review outcome (0 or 1 items). The generated type cannot say which facts are `null` for a
- * given outcome: `requestedAction` and `actorUserId` for the expiry job, `reasonCategory` and
- * `reason` except for a staff rejection, `systemReason` except for a system outcome.
+ * The staff detail of a transfer that was ever held for review (doc 02 §2.7 "As built").
+ * `decidedAt`, `rejectionReasonCategory` and `ledgerStatus` are `null` while they do not apply.
  */
-export type TransferReviewHistory = Omit<
-  GeneratedTransferReviewHistory,
-  'requestedAction' | 'actorUserId' | 'reasonCategory' | 'reason' | 'systemReason'
-> & {
-  requestedAction?: string | null;
-  actorUserId?: string | null;
-  reasonCategory?: string | null;
-  reason?: string | null;
-  systemReason?: string | null;
-};
+export type TransferReviewDetail = ResponseBodyOf<
+  '/api/v1/admin/transfer-reviews/{transferId}',
+  'get'
+>;
 
 /**
- * The staff detail of a transfer that was ever held for review (doc 02 §2.7 "As built"). The
- * generated type cannot say that `decidedAt`, `rejectionReasonCategory` and `ledgerStatus` are
- * `null` while they do not apply, so those are widened, as is the history.
+ * The review outcome (0 or 1 items). Which facts are `null` depends on the outcome:
+ * `requestedAction` and `actorUserId` for the expiry job, `reasonCategory` and `reason` except for
+ * a staff rejection, `systemReason` except for a system outcome.
  */
-export type TransferReviewDetail = Omit<
-  GeneratedTransferReviewDetail,
-  'decidedAt' | 'rejectionReasonCategory' | 'ledgerStatus' | 'history'
-> & {
-  decidedAt?: string | null;
-  rejectionReasonCategory?: string | null;
-  ledgerStatus?: string | null;
-  history?: TransferReviewHistory[];
-};
+export type TransferReviewHistory = TransferReviewDetail['history'][number];
 
 /** The size of the reviewer's reason (ReviewOutcome.MAX_REASON_LENGTH, in code points). */
 export const TRANSFER_REJECTION_REASON_MAX_LENGTH = 500;

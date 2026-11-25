@@ -1,8 +1,12 @@
 package com.portfolio.wallet.transaction.web;
 
+import com.portfolio.wallet.common.web.OpenApiDocumentation;
 import com.portfolio.wallet.common.web.PageResponse;
 import com.portfolio.wallet.transaction.application.TransactionHistoryService;
 import com.portfolio.wallet.transaction.application.TransactionPage;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.UUID;
@@ -22,6 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
  * /transactions/{id}} in the MVP. Responses are not cached (Spring Security's {@code Cache-Control:
  * no-store}).
  */
+@Tag(name = "Transaction", description = "The caller's history, read from the ledger")
+@SecurityRequirement(name = OpenApiDocumentation.BEARER)
 @RestController
 @RequestMapping("/api/v1/transactions")
 @PreAuthorize("hasRole('CUSTOMER')")
@@ -34,6 +40,10 @@ public class TransactionController {
   }
 
   /** Newest first, size 1–100 (doc 02 §1.5). */
+  @Operation(
+      operationId = "listTransactions",
+      summary = "List the caller's completed movements",
+      description = "Newest first; an empty page before KYC approval.")
   @GetMapping
   PageResponse<TransactionResponse> list(
       @AuthenticationPrincipal Jwt jwt,

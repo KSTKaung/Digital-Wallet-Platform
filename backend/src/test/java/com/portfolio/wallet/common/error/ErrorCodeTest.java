@@ -32,6 +32,7 @@ class ErrorCodeTest {
           "INVALID_TRANSFER_STATE",
           "RATE_LIMITED",
           "UNSUPPORTED_MEDIA_TYPE",
+          "INVALID_RESET_TOKEN",
           "SERVICE_DEGRADED",
           "QR_EXPIRED",
           "MERCHANT_NOT_APPROVED",
@@ -67,5 +68,13 @@ class ErrorCodeTest {
     assertThat(ErrorCode.RATE_LIMITED.status().value()).isEqualTo(429);
     assertThat(ErrorCode.UNSUPPORTED_MEDIA_TYPE.status().value()).isEqualTo(415);
     assertThat(ErrorCode.INVALID_KYC_STATE.status().value()).isEqualTo(409);
+  }
+
+  /** The PR 7 addition (documentations/08 §4E.2 E3): the status of the code it replaces. */
+  @Test
+  void anInvalidResetTokenKeepsTheValidationStatus() {
+    assertThat(ErrorCode.INVALID_RESET_TOKEN.status())
+        .isEqualTo(ErrorCode.VALIDATION_ERROR.status());
+    assertThat(ErrorCode.INVALID_RESET_TOKEN.status().value()).isEqualTo(400);
   }
 }

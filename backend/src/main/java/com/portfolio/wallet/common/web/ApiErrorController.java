@@ -2,6 +2,7 @@ package com.portfolio.wallet.common.web;
 
 import com.portfolio.wallet.common.correlation.CorrelationId;
 import com.portfolio.wallet.common.error.ErrorCode;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.webmvc.error.ErrorController;
@@ -18,7 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>A direct request to {@code /error}, which is public, carries no error status and gets the
  * ordinary 404.
+ *
+ * <p>Hidden from the OpenAPI document: it is not an endpoint of the API (documentations/08 §4E).
  */
+@Hidden
 @RestController
 @RequestMapping("${server.error.path:${error.path:/error}}")
 public class ApiErrorController implements ErrorController {

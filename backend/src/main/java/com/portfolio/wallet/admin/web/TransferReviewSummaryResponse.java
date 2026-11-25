@@ -1,6 +1,7 @@
 package com.portfolio.wallet.admin.web;
 
 import com.portfolio.wallet.admin.application.TransferReviewSummary;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -13,7 +14,8 @@ record TransferReviewSummaryResponse(
     String currency,
     Instant heldAt,
     Instant reviewExpiresAt,
-    Integer score) {
+    @Schema(nullable = true, description = "The risk score, 0-100; null if no assessment is found")
+        Integer score) {
 
   static TransferReviewSummaryResponse from(TransferReviewSummary summary) {
     return new TransferReviewSummaryResponse(

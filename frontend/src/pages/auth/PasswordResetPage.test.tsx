@@ -1,9 +1,10 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { RESET_EXPIRED_MESSAGE } from '../../api/errorMessages';
 import { emptyResponse, errorResponse, jsonResponse, stubFetch } from '../../test/http';
 import { renderRoute } from '../../test/render';
-import { CODE_SENT_MESSAGE, RESET_EXPIRED_MESSAGE } from './PasswordResetPage';
+import { CODE_SENT_MESSAGE } from './PasswordResetPage';
 
 const NEW_PASSWORD = 'a brand new passphrase';
 const TOKEN = 'reset-token-value';
@@ -185,8 +186,12 @@ describe('PasswordResetPage from /forgot-password', () => {
 
   it.each([
     [
-      'an invalid or expired token',
-      () => errorResponse(400, 'VALIDATION_ERROR', 'Invalid or expired reset token'),
+      'INVALID_RESET_TOKEN',
+      () => errorResponse(400, 'INVALID_RESET_TOKEN', 'Invalid or expired reset token'),
+    ],
+    [
+      'INVALID_RESET_TOKEN with any message',
+      () => errorResponse(400, 'INVALID_RESET_TOKEN', 'newPassword: unrelated text'),
     ],
     ['a 401', () => errorResponse(401, 'UNAUTHORIZED')],
   ])('asks to start again after %s', async (_name, reset) => {
@@ -208,6 +213,29 @@ describe('PasswordResetPage from /forgot-password', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Reset your password' })).toHaveFocus();
     expect(screen.getByLabelText('Email')).toHaveValue('a@example.com');
   });
+
+  it.each([
+    // The pre-PR 7 answer for a bad token: no longer read as an expired reset (E3).
+    ['without a field', 'Invalid or expired reset token', 'Invalid or expired reset token'],
+    ['naming another field', 'resetToken: must not be blank', 'resetToken must not be blank.'],
+  ])(
+    'shows a VALIDATION_ERROR %s as it is and keeps the reset going',
+    async (_name, message, shown) => {
+      const user = userEvent.setup();
+      stubs({ reset: () => errorResponse(400, 'VALIDATION_ERROR', message) });
+      renderRoute('/forgot-password');
+
+      await requestCode(user);
+      await enterCode(user);
+      await choosePassword(user);
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(shown);
+      expect(alert).not.toHaveTextContent(RESET_EXPIRED_MESSAGE);
+      expect(within(alert).queryByRole('button', { name: 'Start again' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Set new password' })).toBeInTheDocument();
+    },
+  );
 });
 
 describe('PasswordResetPage from /reset-password', () => {

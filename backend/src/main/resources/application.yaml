@@ -356,7 +356,10 @@ app:
     pending-account-ttl: 24h
     owner-notice-interval: 1h
 
-# OpenAPI JSON (/v3/api-docs) is off by default and enabled only in the local profile.
+# OpenAPI JSON (/v3/api-docs) is off by default and enabled only in the local profile. Its
+# committed copy is openapi/openapi.json, checked by OpenApiContractIT (documentations/08 §4E, E2).
 springdoc:
   api-docs:
     enabled: false
+  # Every endpoint answers JSON; without this the document lists "*/*". Documentation only.
+  default-produces-media-type: application/json
