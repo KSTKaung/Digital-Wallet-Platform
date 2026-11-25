@@ -209,6 +209,16 @@ async function main() {
     check(`SPA ${path} served with the CSP`, response.status === 200 && csp.includes("script-src 'self'"), String(response.status));
   }
 
+  // The OpenAPI document is served only by the backend in the local profile, never through nginx
+  // (documentations/06 §4, MVP-ADR-15): nginx answers this path with the SPA shell.
+  const docs = await fetch(`${BASE}/v3/api-docs`);
+  const docsBody = await docs.text();
+  check(
+    'API document not reachable through nginx',
+    !(docs.headers.get('content-type') ?? '').includes('json') && !docsBody.includes('"openapi"'),
+    `${docs.status} ${docs.headers.get('content-type')}`,
+  );
+
   const compliance = await staffSignIn('compliance', env('STAFF_COMPLIANCE_EMAIL'), env('STAFF_COMPLIANCE_PASSWORD'));
   const admin = await staffSignIn('admin', env('STAFF_ADMIN_EMAIL'), env('STAFF_ADMIN_PASSWORD'));
   const alice = await signUp('alice', 'Alice', 'Smoke');

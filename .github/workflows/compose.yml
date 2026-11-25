@@ -73,6 +73,10 @@ jobs:
             echo "STAFF_COMPLIANCE_EMAIL=smoke-compliance@example.test"
             echo "STAFF_COMPLIANCE_PASSWORD=Smoke-Compliance-$(openssl rand -hex 16)"
           } > .env
+          # Defence in depth (owner, 2026-11-25): mask every generated value, so the runner
+          # redacts it should a later step or service log ever print it.
+          grep -E '^(POSTGRES_SUPERUSER_PASSWORD|WALLET_OWNER_PASSWORD|WALLET_APP_PASSWORD|JWT_PRIVATE_KEY|JWT_KID|OTP_HMAC_SECRET|REFRESH_TOKEN_PEPPER|STAFF_ADMIN_PASSWORD|STAFF_COMPLIANCE_PASSWORD)=' .env \
+            | while IFS= read -r line; do echo "::add-mask::${line#*=}"; done
       - name: Start the stack
         run: docker compose up -d --build --wait --wait-timeout 600
       - name: Run the smoke test
