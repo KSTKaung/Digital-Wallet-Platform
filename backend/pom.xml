@@ -20,7 +20,7 @@
   <properties>
     <java.version>21</java.version>
     <!-- Not managed by the Spring Boot BOM; pinned explicitly (documentations/06 MVP-ADR-15). -->
-    <springdoc.version>3.2.0</springdoc.version>
+    <springdoc.version>3.2.1</springdoc.version>
     <archunit.version>1.5.1</archunit.version>
     <!-- Argon2id for Spring Security's Argon2PasswordEncoder (documentations/06 MVP-ADR-23). The
          Boot BOM does not manage Bouncy Castle and spring-security-crypto leaves it to the
